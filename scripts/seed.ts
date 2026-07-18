@@ -220,7 +220,8 @@ async function main() {
   if (revisar > 0) {
     console.log(
       `\n⚠ ${revisar} participações ficaram marcadas para revisão (colocações\n` +
-        `  duplicadas na planilha original). Abra /admin/revisao para corrigir.`,
+        `  duplicadas na planilha original). As etapas afetadas aparecem em\n` +
+        `  /admin sob "Pendências" — abra a etapa e confira as colocações.`,
     );
   }
   console.log(

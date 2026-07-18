@@ -138,12 +138,16 @@ resultado limpa a marcação.
 
 ### 3. Conferir os números
 
-```bash
-npx tsx scripts/verificar.ts
-```
+| Comando | O que faz |
+| --- | --- |
+| `npm run checar` | Diz quais variáveis faltam e quais tabelas já existem |
+| `npm run verificar` | Planilha → ranking, sem tocar no banco |
+| `npm run verificar:banco` | Planilha → seed → Supabase → queries do app → ranking |
+| `npm run verificar:rls` | Tenta escrever com a chave pública e falha se conseguir |
+| `npm run sql` | Junta as migrations num arquivo só, para colar no SQL Editor |
 
-Roda o mesmo caminho que o app usa (planilha → ranking) e imprime tudo lado a lado com os totais
-da planilha, sem tocar no banco.
+O `verificar:banco` é o mais importante depois do seed: ele lê **do banco**, pelo mesmo código que
+roda em produção, e compara com a planilha. É o que prova que o dado sobreviveu à ida e volta.
 
 ---
 

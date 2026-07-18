@@ -11,8 +11,11 @@
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
     "checar": "tsx scripts/checar-banco.ts",
+    "sql": "tsx scripts/juntar-migrations.ts",
     "verificar": "tsx scripts/verificar.ts",
-    "extract-logo": "tsx scripts/extract-logo.ts"
+    "extract-logo": "tsx scripts/extract-logo.ts",
+    "verificar:banco": "tsx scripts/verificar-banco.ts",
+    "verificar:rls": "tsx scripts/verificar-rls.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
