@@ -9,7 +9,7 @@
  */
 
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -26,8 +26,23 @@ function getSessionSecret(): string {
   return secret;
 }
 
+/**
+ * A chave de assinatura mistura o SESSION_SECRET com um resumo da senha atual.
+ *
+ * O efeito prático: trocar ADMIN_PASSWORD invalida na hora todos os cookies já
+ * emitidos. Sem isso, quem estivesse logado continuaria dentro por até 12h
+ * mesmo depois da troca — justamente o cenário em que você troca a senha
+ * porque ela vazou.
+ */
+function getSigningKey(): string {
+  const passwordDigest = createHash("sha256")
+    .update(process.env.ADMIN_PASSWORD ?? "")
+    .digest("hex");
+  return `${getSessionSecret()}:${passwordDigest}`;
+}
+
 function sign(payload: string): string {
-  return createHmac("sha256", getSessionSecret()).update(payload).digest("hex");
+  return createHmac("sha256", getSigningKey()).update(payload).digest("hex");
 }
 
 /**

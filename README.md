@@ -332,5 +332,8 @@ liderança da Ligia com 174 pontos e os empates de 116 pontos entre Rodolfo e Ro
   tentar importá-lo.
 - O painel usa uma senha única (`ADMIN_PASSWORD`), comparada em tempo constante. O cookie de
   sessão guarda apenas a validade, assinada com HMAC — a senha não trafega depois do login.
+- A chave que assina o cookie mistura `SESSION_SECRET` com um resumo da senha atual, então
+  **trocar `ADMIN_PASSWORD` derruba todas as sessões abertas na hora**. Sem isso, trocar a senha
+  por suspeita de vazamento deixaria o invasor logado por até 12 horas.
 - **Toda Server Action revalida a sessão**, não só o layout: proteger apenas a navegação deixaria
   os endpoints abertos a um POST direto.
