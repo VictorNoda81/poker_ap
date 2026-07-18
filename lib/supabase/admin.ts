@@ -8,6 +8,7 @@
 
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { normalizeSupabaseUrl } from "./url";
 
 let cached: SupabaseClient | null = null;
 
@@ -24,7 +25,7 @@ export function getAdminClient(): SupabaseClient {
     );
   }
 
-  cached = createClient(url, serviceKey, {
+  cached = createClient(normalizeSupabaseUrl(url), serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   return cached;

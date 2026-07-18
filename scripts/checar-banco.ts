@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { normalizeSupabaseUrl } from "../lib/supabase/url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 loadEnv({ path: path.join(ROOT, ".env.local") });
@@ -43,10 +44,10 @@ async function main() {
   console.log(`ADMIN_PASSWORD ................. ${marca(senha)}`);
   console.log(`SESSION_SECRET ................. ${marca(segredo)}`);
 
-  if (url?.includes("/rest/v1")) {
+  if (url && normalizeSupabaseUrl(url) !== url) {
     console.log(
-      "\n⚠ A URL contém /rest/v1. Use apenas a URL base do projeto\n" +
-        "  (https://xxxx.supabase.co) — o cliente monta o caminho sozinho.",
+      `\nℹ A URL tem um sufixo de API no final. O app corta automaticamente e usa:\n` +
+        `  ${normalizeSupabaseUrl(url)}`,
     );
   }
 
@@ -57,7 +58,7 @@ async function main() {
 
   console.log("\n═══ TABELAS ══════════════════════════════════════════════\n");
 
-  const db = createClient(url, service, {
+  const db = createClient(normalizeSupabaseUrl(url), service, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 

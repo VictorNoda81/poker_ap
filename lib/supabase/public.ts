@@ -7,6 +7,7 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { normalizeSupabaseUrl } from "./url";
 
 let cached: SupabaseClient | null = null;
 
@@ -23,7 +24,7 @@ export function getPublicClient(): SupabaseClient {
     );
   }
 
-  cached = createClient(url, anonKey, {
+  cached = createClient(normalizeSupabaseUrl(url), anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   return cached;

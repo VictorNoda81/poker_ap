@@ -47,6 +47,10 @@ Vercel.
 | Project API keys → `anon` `public` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
 | Project API keys → `service_role` `secret` | `SUPABASE_SERVICE_ROLE_KEY` |
 
+> A **Project URL** aparece no painel do Supabase com `/rest/v1/` no final. Pode colar com ou sem
+> o sufixo — o app corta automaticamente (`lib/supabase/url.ts`). Colar com o sufixo era o erro
+> que deixava o site no ar mas sem carregar dado nenhum.
+
 > A chave `anon` é pública por natureza (vai no navegador) e, pelas políticas de segurança
 > configuradas nas migrations, só consegue **ler**. A chave `service_role` ignora todas as
 > restrições e **nunca** pode ser exposta: ela só é usada no servidor, dentro do painel de admin.

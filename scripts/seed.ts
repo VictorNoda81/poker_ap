@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { parse2026Workbook, type Parsed2026 } from "../lib/import/parse-2026";
+import { normalizeSupabaseUrl } from "../lib/supabase/url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -192,7 +193,7 @@ async function seedEntries(
 async function main() {
   const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
   const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-  const db = createClient(url, serviceKey, {
+  const db = createClient(normalizeSupabaseUrl(url), serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
