@@ -1,0 +1,452 @@
+/**
+ * Leituras da área pública.
+ *
+ * Estratégia: em vez de espalhar agregações em SQL, carregamos as linhas da
+ * temporada (são poucas centenas — ~56 jogadores × ~10 etapas) e agregamos em
+ * TypeScript com as funções puras de `lib/domain/`. Assim o mesmo código que
+ * roda em produção é o que os testes verificam contra a planilha real.
+ */
+
+import { computeReserve, type PrizeSettings } from "@/lib/domain/prizes";
+import {
+  buildRanking,
+  type RankingEntry,
+  type RankingPlayer,
+  type RankingRow,
+} from "@/lib/domain/ranking";
+import { getPublicClient } from "@/lib/supabase/public";
+import {
+  toNumber,
+  toNumberOr,
+  type PlayerRow,
+  type PointsTableRow,
+  type SeasonRow,
+  type SeasonSettingsRow,
+  type StageEntryRow,
+  type StageRow,
+} from "./types";
+
+export interface SeasonSettings extends PrizeSettings {
+  buyin: number;
+  rebuy: number;
+  addon: number;
+  pointsBelowCutoff: number;
+  finalInviteCount: number;
+}
+
+export const FALLBACK_SETTINGS: SeasonSettings = {
+  buyin: 150,
+  rebuy: 100,
+  addon: 150,
+  finalReservePct: 10,
+  firstPct: 50,
+  secondPct: 30,
+  fourthFixed: 150,
+  pointsBelowCutoff: 5,
+  finalInviteCount: 20,
+};
+
+export interface StageSummary {
+  id: string;
+  number: number;
+  eventDate: string;
+  isFinal: boolean;
+  isOctoberCutoff: boolean;
+  status: "scheduled" | "completed";
+  /** Arrecadação: o valor informado manualmente ou a soma do que os jogadores gastaram. */
+  gross: number;
+  /** true quando a arrecadação veio de `gross_amount_override`, não do detalhe por jogador. */
+  grossIsManual: boolean;
+  reserve: number;
+  /** Soma dos prêmios efetivamente pagos nesta etapa. */
+  prizesPaid: number;
+  participantCount: number;
+  /** Participantes cuja despesa ainda não foi lançada. */
+  missingFinancials: number;
+  needsReviewCount: number;
+}
+
+export interface SeasonBundle {
+  season: SeasonRow;
+  settings: SeasonSettings;
+  pointsTable: Record<number, number>;
+  stages: StageSummary[];
+  players: RankingPlayer[];
+  entries: RankingEntry[];
+  ranking: RankingRow[];
+  /** Total acumulado dos 10% para a Etapa Final. */
+  accumulatedReserve: number;
+  /** Quanto da reserva já foi pago na Etapa Final (se ela já aconteceu). */
+  totals: {
+    gross: number;
+    prizesPaid: number;
+    participations: number;
+  };
+}
+
+function mapPlayer(row: PlayerRow): RankingPlayer {
+  return {
+    id: row.id,
+    fullName: row.full_name,
+    type: row.type,
+    memberNumber: row.member_number,
+    invitedByName: row.invited_by_name,
+  };
+}
+
+function mapSettings(row: SeasonSettingsRow | null): SeasonSettings {
+  if (!row) return { ...FALLBACK_SETTINGS };
+  return {
+    buyin: toNumberOr(row.buyin, FALLBACK_SETTINGS.buyin),
+    rebuy: toNumberOr(row.rebuy, FALLBACK_SETTINGS.rebuy),
+    addon: toNumberOr(row.addon, FALLBACK_SETTINGS.addon),
+    finalReservePct: toNumberOr(row.final_reserve_pct, FALLBACK_SETTINGS.finalReservePct),
+    firstPct: toNumberOr(row.prize_first_pct, FALLBACK_SETTINGS.firstPct),
+    secondPct: toNumberOr(row.prize_second_pct, FALLBACK_SETTINGS.secondPct),
+    fourthFixed: toNumberOr(row.prize_fourth_fixed, FALLBACK_SETTINGS.fourthFixed),
+    pointsBelowCutoff: row.points_below_cutoff ?? FALLBACK_SETTINGS.pointsBelowCutoff,
+    finalInviteCount: row.final_invite_count ?? FALLBACK_SETTINGS.finalInviteCount,
+  };
+}
+
+/** Temporadas cadastradas, da mais recente para a mais antiga. */
+export async function listSeasons(): Promise<SeasonRow[]> {
+  const { data, error } = await getPublicClient()
+    .from("seasons")
+    .select("*")
+    .order("year", { ascending: false });
+  if (error) throw new Error(`Erro ao listar temporadas: ${error.message}`);
+  return (data ?? []) as SeasonRow[];
+}
+
+/** A temporada marcada como atual; se não houver nenhuma, a mais recente. */
+export async function getCurrentSeason(): Promise<SeasonRow | null> {
+  const seasons = await listSeasons();
+  return seasons.find((s) => s.is_current) ?? seasons[0] ?? null;
+}
+
+export async function getSeasonByYear(year: number): Promise<SeasonRow | null> {
+  const { data, error } = await getPublicClient()
+    .from("seasons")
+    .select("*")
+    .eq("year", year)
+    .maybeSingle();
+  if (error) throw new Error(`Erro ao buscar temporada ${year}: ${error.message}`);
+  return (data as SeasonRow) ?? null;
+}
+
+/**
+ * Carrega tudo de uma temporada e já devolve o ranking calculado.
+ *
+ * Faz 4 consultas paralelas e agrega em memória — mais simples de auditar do
+ * que views SQL, e o volume de dados da liga é pequeno.
+ */
+export async function getSeasonBundle(season: SeasonRow): Promise<SeasonBundle> {
+  const db = getPublicClient();
+
+  const [stagesResult, playersResult, settingsResult, pointsResult] = await Promise.all([
+    db.from("stages").select("*").eq("season_id", season.id).order("number"),
+    db.from("players").select("*").order("full_name"),
+    db.from("season_settings").select("*").eq("season_id", season.id).maybeSingle(),
+    db.from("points_table").select("*").eq("season_id", season.id).order("placement"),
+  ]);
+
+  if (stagesResult.error) throw new Error(`Erro ao carregar etapas: ${stagesResult.error.message}`);
+  if (playersResult.error) throw new Error(`Erro ao carregar jogadores: ${playersResult.error.message}`);
+  if (pointsResult.error) throw new Error(`Erro ao carregar pontuação: ${pointsResult.error.message}`);
+
+  const stageRows = (stagesResult.data ?? []) as StageRow[];
+  const playerRows = (playersResult.data ?? []) as PlayerRow[];
+  const settings = mapSettings((settingsResult.data as SeasonSettingsRow) ?? null);
+
+  const pointsTable: Record<number, number> = {};
+  for (const row of (pointsResult.data ?? []) as PointsTableRow[]) {
+    pointsTable[row.placement] = row.points;
+  }
+
+  // Participações de todas as etapas da temporada.
+  const stageIds = stageRows.map((s) => s.id);
+  let entryRows: StageEntryRow[] = [];
+  if (stageIds.length > 0) {
+    const { data, error } = await db.from("stage_entries").select("*").in("stage_id", stageIds);
+    if (error) throw new Error(`Erro ao carregar participações: ${error.message}`);
+    entryRows = (data ?? []) as StageEntryRow[];
+  }
+
+  const entries: RankingEntry[] = entryRows.map((row) => ({
+    stageId: row.stage_id,
+    playerId: row.player_id,
+    placement: row.placement,
+    points: row.points,
+    amountPaid: toNumber(row.amount_paid),
+    prizeAmount: toNumberOr(row.prize_amount, 0),
+  }));
+
+  // --- Resumo por etapa ----------------------------------------------------
+  const byStage = new Map<string, StageEntryRow[]>();
+  for (const row of entryRows) {
+    const list = byStage.get(row.stage_id);
+    if (list) list.push(row);
+    else byStage.set(row.stage_id, [row]);
+  }
+
+  const stages: StageSummary[] = stageRows.map((row) => {
+    const stageEntries = byStage.get(row.id) ?? [];
+    const override = toNumber(row.gross_amount_override);
+
+    const sumPaid = stageEntries.reduce((sum, e) => sum + (toNumber(e.amount_paid) ?? 0), 0);
+    // O valor informado manualmente tem precedência: é o caso das etapas
+    // importadas da planilha, onde só o total do pote é conhecido.
+    const gross = override ?? sumPaid;
+
+    return {
+      id: row.id,
+      number: row.number,
+      eventDate: row.event_date,
+      isFinal: row.is_final,
+      isOctoberCutoff: row.is_october_cutoff,
+      status: row.status,
+      gross,
+      grossIsManual: override !== null,
+      // A Etapa Final não separa reserva nova — ela distribui o acumulado.
+      reserve: row.is_final ? 0 : computeReserve(gross, settings.finalReservePct),
+      prizesPaid: stageEntries.reduce((sum, e) => sum + toNumberOr(e.prize_amount, 0), 0),
+      participantCount: stageEntries.length,
+      missingFinancials: stageEntries.filter((e) => toNumber(e.amount_paid) === null).length,
+      needsReviewCount: stageEntries.filter((e) => e.needs_review).length,
+    };
+  });
+
+  const players = playerRows.map(mapPlayer);
+  const ranking = buildRanking(players, entries);
+
+  return {
+    season,
+    settings,
+    pointsTable,
+    stages,
+    players,
+    entries,
+    ranking,
+    accumulatedReserve: stages.reduce((sum, s) => sum + s.reserve, 0),
+    totals: {
+      gross: stages.reduce((sum, s) => sum + s.gross, 0),
+      prizesPaid: stages.reduce((sum, s) => sum + s.prizesPaid, 0),
+      participations: entryRows.length,
+    },
+  };
+}
+
+export interface StageEntryDetail {
+  player: RankingPlayer;
+  placement: number | null;
+  points: number;
+  amountPaid: number | null;
+  prizeAmount: number;
+  rebuys: number | null;
+  hadAddon: boolean | null;
+  needsReview: boolean;
+  reviewNote: string | null;
+}
+
+export interface StageDetail {
+  stage: StageSummary;
+  season: SeasonRow;
+  settings: SeasonSettings;
+  entries: StageEntryDetail[];
+}
+
+/** Resultado completo de uma etapa, ordenado por colocação. */
+export async function getStageDetail(stageId: string): Promise<StageDetail | null> {
+  const db = getPublicClient();
+
+  const { data: stageRow, error } = await db
+    .from("stages")
+    .select("*")
+    .eq("id", stageId)
+    .maybeSingle();
+  if (error) throw new Error(`Erro ao buscar etapa: ${error.message}`);
+  if (!stageRow) return null;
+
+  const stage = stageRow as StageRow;
+
+  const { data: seasonRow } = await db
+    .from("seasons")
+    .select("*")
+    .eq("id", stage.season_id)
+    .maybeSingle();
+  if (!seasonRow) return null;
+
+  const bundle = await getSeasonBundle(seasonRow as SeasonRow);
+  const summary = bundle.stages.find((s) => s.id === stageId);
+  if (!summary) return null;
+
+  const { data: entryRows, error: entriesError } = await db
+    .from("stage_entries")
+    .select("*")
+    .eq("stage_id", stageId);
+  if (entriesError) throw new Error(`Erro ao carregar resultado: ${entriesError.message}`);
+
+  const playersById = new Map(bundle.players.map((p) => [p.id, p]));
+
+  const entries: StageEntryDetail[] = ((entryRows ?? []) as StageEntryRow[])
+    .map((row) => ({
+      player: playersById.get(row.player_id) ?? {
+        id: row.player_id,
+        fullName: "Jogador removido",
+        type: "indefinido" as const,
+        memberNumber: null,
+        invitedByName: null,
+      },
+      placement: row.placement,
+      points: row.points,
+      amountPaid: toNumber(row.amount_paid),
+      prizeAmount: toNumberOr(row.prize_amount, 0),
+      rebuys: row.rebuys,
+      hadAddon: row.had_addon,
+      needsReview: row.needs_review,
+      reviewNote: row.review_note,
+    }))
+    .sort(compareStageEntries);
+
+  return { stage: summary, season: bundle.season, settings: bundle.settings, entries };
+}
+
+/** Ordena o resultado da etapa: colocados primeiro, depois por pontos e nome. */
+export function compareStageEntries(a: StageEntryDetail, b: StageEntryDetail): number {
+  const aPlace = a.placement ?? Number.POSITIVE_INFINITY;
+  const bPlace = b.placement ?? Number.POSITIVE_INFINITY;
+  if (aPlace !== bPlace) return aPlace - bPlace;
+  if (b.points !== a.points) return b.points - a.points;
+  return a.player.fullName.localeCompare(b.player.fullName, "pt-BR");
+}
+
+export interface PlayerStageResult {
+  seasonYear: number;
+  stageId: string;
+  stageNumber: number;
+  eventDate: string;
+  isFinal: boolean;
+  placement: number | null;
+  points: number;
+  amountPaid: number | null;
+  prizeAmount: number;
+}
+
+export interface PlayerDetail {
+  player: RankingPlayer;
+  notes: string | null;
+  /** Uma linha por temporada em que o jogador participou. */
+  bySeason: {
+    season: SeasonRow;
+    row: RankingRow;
+    results: PlayerStageResult[];
+  }[];
+  career: {
+    stagesPlayed: number;
+    totalPoints: number;
+    totalPaid: number;
+    totalReceived: number;
+    balance: number;
+    wins: number;
+    bestPlacement: number | null;
+  };
+}
+
+/** Ficha completa de um jogador, temporada a temporada. */
+export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | null> {
+  const db = getPublicClient();
+
+  const { data: playerRow, error } = await db
+    .from("players")
+    .select("*")
+    .eq("id", playerId)
+    .maybeSingle();
+  if (error) throw new Error(`Erro ao buscar jogador: ${error.message}`);
+  if (!playerRow) return null;
+
+  const player = mapPlayer(playerRow as PlayerRow);
+  const seasons = await listSeasons();
+
+  const bySeason: PlayerDetail["bySeason"] = [];
+  const career = {
+    stagesPlayed: 0,
+    totalPoints: 0,
+    totalPaid: 0,
+    totalReceived: 0,
+    balance: 0,
+    wins: 0,
+    bestPlacement: null as number | null,
+  };
+
+  for (const season of seasons) {
+    const bundle = await getSeasonBundle(season);
+    const row = bundle.ranking.find((r) => r.player.id === playerId);
+    if (!row || row.stagesPlayed === 0) continue;
+
+    const stagesById = new Map(bundle.stages.map((s) => [s.id, s]));
+    const results: PlayerStageResult[] = bundle.entries
+      .filter((e) => e.playerId === playerId)
+      .map((entry) => {
+        const stage = stagesById.get(entry.stageId)!;
+        return {
+          seasonYear: season.year,
+          stageId: stage.id,
+          stageNumber: stage.number,
+          eventDate: stage.eventDate,
+          isFinal: stage.isFinal,
+          placement: entry.placement,
+          points: entry.points,
+          amountPaid: entry.amountPaid,
+          prizeAmount: entry.prizeAmount,
+        };
+      })
+      .sort((a, b) => a.stageNumber - b.stageNumber);
+
+    bySeason.push({ season, row, results });
+
+    career.stagesPlayed += row.stagesPlayed;
+    career.totalPoints += row.totalPoints;
+    career.totalPaid += row.totalPaid;
+    career.totalReceived += row.totalReceived;
+    career.wins += row.wins;
+    if (row.bestPlacement !== null) {
+      career.bestPlacement =
+        career.bestPlacement === null
+          ? row.bestPlacement
+          : Math.min(career.bestPlacement, row.bestPlacement);
+    }
+  }
+
+  career.balance = career.totalReceived - career.totalPaid;
+
+  return { player, notes: (playerRow as PlayerRow).notes, bySeason, career };
+}
+
+/** Lista de convidados já salva para uma Etapa Final. */
+export async function getFinalInvitees(
+  stageId: string,
+): Promise<{ playerId: string; source: "auto" | "manual"; rank: number | null }[]> {
+  const { data, error } = await getPublicClient()
+    .from("final_invitees")
+    .select("player_id, source, rank_at_invite")
+    .eq("stage_id", stageId)
+    .order("rank_at_invite", { nullsFirst: false });
+  if (error) throw new Error(`Erro ao carregar convidados: ${error.message}`);
+
+  return (data ?? []).map((row) => ({
+    playerId: row.player_id as string,
+    source: row.source as "auto" | "manual",
+    rank: (row.rank_at_invite as number | null) ?? null,
+  }));
+}
+
+/** Todos os jogadores cadastrados, para a listagem pública. */
+export async function listPlayers(): Promise<RankingPlayer[]> {
+  const { data, error } = await getPublicClient()
+    .from("players")
+    .select("*")
+    .order("full_name");
+  if (error) throw new Error(`Erro ao listar jogadores: ${error.message}`);
+  return ((data ?? []) as PlayerRow[]).map(mapPlayer);
+}

@@ -1,0 +1,125 @@
+import Link from "next/link";
+import { ChipIcon, TrophyIcon } from "@/components/brand/icons";
+import { Podium } from "@/components/ranking/podium";
+import { RankingTable } from "@/components/ranking/ranking-table";
+import {
+  EmptyState,
+  ErrorNotice,
+  PageHeading,
+  SetupNotice,
+  StatCard,
+} from "@/components/ui/primitives";
+import { getCurrentSeason, getSeasonBundle } from "@/lib/db/queries";
+import { load } from "@/lib/db/load";
+import { formatBRL, formatNumber } from "@/lib/domain/money";
+import { formatShortDate, stageName } from "@/lib/domain/stage-name";
+
+// O ranking muda a cada lançamento do admin — sempre renderiza na hora.
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const result = await load(async () => {
+    const season = await getCurrentSeason();
+    if (!season) return null;
+    return getSeasonBundle(season);
+  });
+
+  if (result.status === "unconfigured") return <SetupNotice />;
+  if (result.status === "error") return <ErrorNotice message={result.message} />;
+
+  const bundle = result.data;
+  if (!bundle) {
+    return (
+      <EmptyState
+        title="Nenhuma temporada cadastrada"
+        description="Crie a primeira temporada no painel de administração ou rode o seed para importar a temporada 2026."
+      />
+    );
+  }
+
+  const { season, ranking, stages, accumulatedReserve, totals, settings } = bundle;
+  const realizadas = stages.filter((s) => s.status === "completed");
+  const proxima = stages.find((s) => s.status === "scheduled");
+  const jogadoresAtivos = ranking.filter((r) => r.stagesPlayed > 0).length;
+
+  return (
+    <>
+      <PageHeading
+        eyebrow={season.name}
+        title="Ranking da temporada"
+        subtitle={
+          <>
+            {realizadas.length} de {stages.length} etapas realizadas
+            {proxima ? (
+              <>
+                {" · próxima: "}
+                <Link
+                  href={`/etapas/${proxima.id}`}
+                  className="font-semibold text-chalk hover:text-cap-red-light"
+                >
+                  {stageName(proxima.number, proxima.eventDate, proxima.isFinal)}
+                </Link>
+                {` em ${formatShortDate(proxima.eventDate)}`}
+              </>
+            ) : null}
+          </>
+        }
+        action={
+          <Link
+            href={`/temporadas/${season.year}`}
+            className="inline-flex items-center gap-2 rounded-lg border border-ink-700 px-4 py-2 text-sm font-semibold text-chalk transition-colors hover:border-cap-red hover:text-cap-red-light"
+          >
+            Ver etapas da temporada
+          </Link>
+        }
+      />
+
+      {/* Números da temporada. */}
+      <section className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard
+          label="Jogadores ativos"
+          value={formatNumber(jogadoresAtivos)}
+          hint={`${formatNumber(totals.participations)} participações`}
+        />
+        <StatCard
+          label="Arrecadação total"
+          value={formatBRL(totals.gross)}
+          hint={`${realizadas.length} etapas`}
+          icon={<ChipIcon className="h-5 w-5" />}
+        />
+        <StatCard
+          label="Pote da Etapa Final"
+          value={formatBRL(accumulatedReserve)}
+          hint={`${formatNumber(settings.finalReservePct, 0)}% de cada etapa`}
+          tone="gold"
+          icon={<TrophyIcon className="h-5 w-5" />}
+        />
+        <StatCard
+          label="Prêmios pagos"
+          value={formatBRL(totals.prizesPaid)}
+          hint={totals.prizesPaid === 0 ? "Ainda não lançados" : "Somando todas as etapas"}
+        />
+      </section>
+
+      {jogadoresAtivos === 0 ? (
+        <EmptyState
+          title="Nenhum resultado lançado ainda"
+          description="Assim que a primeira etapa for lançada no painel de administração, o ranking aparece aqui."
+        />
+      ) : (
+        <>
+          <Podium rows={ranking} />
+          <div className="section-title mb-4">Classificação geral</div>
+          <RankingTable rows={ranking} />
+          <p className="mt-4 text-xs leading-relaxed text-chalk-dim">
+            <strong className="text-chalk-dim/90">Pago</strong> é o total que o jogador gastou
+            (buy-in, re-buys e add-on). <strong className="text-chalk-dim/90">Arrecadado</strong> é
+            o total que recebeu de premiação.{" "}
+            <strong className="text-chalk-dim/90">Saldo</strong> é a diferença entre os dois. As
+            médias consideram apenas as etapas em que o jogador participou.
+          </p>
+        </>
+      )}
+    </>
+  );
+}

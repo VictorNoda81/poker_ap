@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   Identidade visual — Liga de Poker do CAP
+   --------------------------------------------------------------------------
+   Vermelho e preto vêm da marca do Clube Alto de Pinheiros (#EA1116 foi
+   amostrado do próprio logo). O verde de feltro, o dourado e as texturas de
+   naipe/ficha vêm da estética de mesa de poker / WSOP.
+
+   O cabeçalho é claro de propósito: o logo do clube tem tipografia PRETA, que
+   sumiria sobre fundo escuro. Conteúdo abaixo é escuro, como uma mesa à noite.
+   ========================================================================== */
+
+@theme {
+  /* Marca do clube */
+  --color-cap-red: #ea1116;
+  --color-cap-red-dark: #b70d11;
+  --color-cap-red-light: #ff3b40;
+
+  /* Feltro da mesa */
+  --color-felt-900: #06231a;
+  --color-felt-800: #0a3226;
+  --color-felt-700: #0e4433;
+  --color-felt-600: #135941;
+
+  /* Fundos escuros */
+  --color-ink-950: #08080a;
+  --color-ink-900: #0e0e12;
+  --color-ink-850: #15151b;
+  --color-ink-800: #1c1c24;
+  --color-ink-700: #2a2a34;
+  --color-ink-600: #3d3d4a;
+
+  /* Pódio */
+  --color-gold: #d4af37;
+  --color-gold-bright: #f2ce5c;
+  --color-silver: #c6ccd2;
+  --color-bronze: #cd7f32;
+
+  /* Texto */
+  --color-chalk: #f4f4f6;
+  --color-chalk-dim: #a8a8b3;
+
+  --font-display: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+
+  --radius-card: 0.875rem;
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-ink-950);
+  color: var(--color-chalk);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Feltro de mesa: gradiente radial esverdeado + granulado sutil, para o fundo
+   não ficar chapado. Puro CSS — sem imagem externa. */
+.felt-surface {
+  background-color: var(--color-ink-950);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(19, 89, 65, 0.35), transparent 70%),
+    radial-gradient(ellipse 70% 50% at 100% 0%, rgba(234, 17, 22, 0.1), transparent 60%);
+}
+
+.felt-panel {
+  background-image:
+    radial-gradient(ellipse 120% 100% at 50% 0%, rgba(19, 89, 65, 0.5), transparent 75%),
+    linear-gradient(180deg, var(--color-felt-800), var(--color-felt-900));
+}
+
+/* Granulado de feltro aplicado por cima de painéis verdes. */
+.felt-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.014) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.03) 0 1px, transparent 1px 3px);
+}
+
+/* --------------------------------------------------------------------------
+   Componentes recorrentes
+   -------------------------------------------------------------------------- */
+
+.card {
+  background-color: var(--color-ink-900);
+  border: 1px solid var(--color-ink-800);
+  border-radius: var(--radius-card);
+}
+
+/* Título de seção com o filete vermelho da marca. */
+.section-title {
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  color: var(--color-chalk-dim);
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.section-title::before {
+  content: "";
+  width: 0.1875rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  background: var(--color-cap-red);
+}
+
+/* Brilho metálico do pódio, usado nas bordas dos três primeiros. */
+.podium-gold {
+  border-color: color-mix(in srgb, var(--color-gold) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-gold) 20%, transparent),
+    0 12px 40px -18px color-mix(in srgb, var(--color-gold) 60%, transparent);
+}
+
+.podium-silver {
+  border-color: color-mix(in srgb, var(--color-silver) 45%, transparent);
+  box-shadow: 0 12px 40px -20px color-mix(in srgb, var(--color-silver) 45%, transparent);
+}
+
+.podium-bronze {
+  border-color: color-mix(in srgb, var(--color-bronze) 45%, transparent);
+  box-shadow: 0 12px 40px -20px color-mix(in srgb, var(--color-bronze) 45%, transparent);
+}
+
+/* Números tabulares: mantém as colunas de pontos e dinheiro alinhadas. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Tabelas largas rolam dentro do próprio container, nunca a página. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll::-webkit-scrollbar {
+  height: 0.5rem;
+}
+.table-scroll::-webkit-scrollbar-track {
+  background: var(--color-ink-900);
+}
+.table-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-ink-700);
+  border-radius: 999px;
+}
+
+/* Foco visível e consistente em todo o app. */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-cap-red-light);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
