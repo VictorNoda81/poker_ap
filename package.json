@@ -10,6 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
+    "checar": "tsx scripts/checar-banco.ts",
+    "verificar": "tsx scripts/verificar.ts",
     "extract-logo": "tsx scripts/extract-logo.ts"
   },
   "dependencies": {
