@@ -1,17 +1,32 @@
 import { redirect } from "next/navigation";
 import { SpadeIcon } from "@/components/brand/icons";
-import { checkPassword, isAdmin, startSession } from "@/lib/auth";
+import {
+  checkPassword,
+  checkRateLimit,
+  isAdmin,
+  recordLoginAttempt,
+  startSession,
+} from "@/lib/auth";
+import { formatarEspera } from "@/lib/domain/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Entrar no painel" };
 
-type SearchParams = { searchParams: Promise<{ erro?: string }> };
+type SearchParams = { searchParams: Promise<{ erro?: string; espera?: string }> };
 
 async function login(formData: FormData) {
   "use server";
 
+  // O limite é checado ANTES de olhar a senha: sem isso, o custo de tentar
+  // continuaria baixo e o limite não protegeria de nada.
+  const limite = await checkRateLimit();
+  if (limite.bloqueado) {
+    redirect(`/admin/login?erro=bloqueado&espera=${limite.liberaEmSegundos}`);
+  }
+
   const password = String(formData.get("senha") ?? "");
+  // Campo vazio não gasta tentativa: é engano de quem digita, não ataque.
   if (!password) redirect("/admin/login?erro=vazia");
 
   let ok = false;
@@ -21,23 +36,37 @@ async function login(formData: FormData) {
     redirect("/admin/login?erro=config");
   }
 
-  if (!ok) redirect("/admin/login?erro=invalida");
+  await recordLoginAttempt(ok);
+
+  if (!ok) {
+    const restantes = Math.max(0, limite.restantes - 1);
+    redirect(`/admin/login?erro=invalida&espera=${restantes}`);
+  }
 
   await startSession();
   redirect("/admin");
 }
 
-const MENSAGENS: Record<string, string> = {
-  vazia: "Digite a senha para continuar.",
-  invalida: "Senha incorreta.",
-  config: "ADMIN_PASSWORD não está configurada no servidor. Veja o .env.example.",
-};
-
 export default async function LoginPage({ searchParams }: SearchParams) {
   if (await isAdmin()) redirect("/admin");
 
-  const { erro } = await searchParams;
-  const mensagem = erro ? MENSAGENS[erro] : null;
+  const { erro, espera } = await searchParams;
+
+  let mensagem: string | null = null;
+  if (erro === "vazia") {
+    mensagem = "Digite a senha para continuar.";
+  } else if (erro === "config") {
+    mensagem = "ADMIN_PASSWORD não está configurada no servidor. Veja o .env.example.";
+  } else if (erro === "bloqueado") {
+    const segundos = Number(espera) || 60;
+    mensagem = `Muitas tentativas. Tente novamente em ${formatarEspera(segundos)}.`;
+  } else if (erro === "invalida") {
+    const restantes = Number(espera);
+    mensagem =
+      Number.isFinite(restantes) && restantes > 0
+        ? `Senha incorreta. ${restantes} tentativa${restantes === 1 ? "" : "s"} restante${restantes === 1 ? "" : "s"}.`
+        : "Senha incorreta.";
+  }
 
   return (
     <div className="mx-auto max-w-md py-10">

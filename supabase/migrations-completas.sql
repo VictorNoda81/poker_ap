@@ -1,9 +1,11 @@
 -- ===========================================================================
 -- Liga de Poker do CAP — todas as migrations, na ordem
 --
--- Gerado por: npm run sql  (0001_schema.sql + 0002_rls.sql)
+-- Gerado por: npm run sql  (0001_schema.sql + 0002_rls.sql + 0003_login_attempts.sql)
 -- Cole TUDO no SQL Editor do Supabase e clique em Run.
--- Rode uma vez só: repetir dá erro de 'já existe', o que é esperado.
+--
+-- Pode rodar quantas vezes quiser: as migrations usam guardas de existência,
+-- então reaplicar o arquivo inteiro não dá erro nem apaga dado nenhum.
 -- ===========================================================================
 
 -- =============================================================================
@@ -17,6 +19,10 @@
 --   * Configurações (pontos, buy-in, premiação) são POR TEMPORADA, para que
 --     mexer nas regras de 2027 não reescreva o histórico de 2026.
 -- =============================================================================
+-- Esta migration pode ser executada mais de uma vez sem erro: tipos, tabelas e
+-- índices usam guardas de existência, e triggers/políticas são recriados. Isso
+-- evita o "already exists" de quem reaplica o arquivo por engano.
+-- =============================================================================
 
 create extension if not exists "pgcrypto";
 
@@ -26,19 +32,28 @@ create extension if not exists "pgcrypto";
 
 -- 'indefinido' é o estado inicial dos jogadores importados da planilha, que não
 -- trazia a informação de sócio/convidado. O admin classifica depois.
-create type player_type as enum ('socio', 'convidado', 'indefinido');
+do $$ begin
+  create type player_type as enum ('socio', 'convidado', 'indefinido');
+exception when duplicate_object then null;
+end $$;
 
-create type stage_status as enum ('scheduled', 'completed');
+do $$ begin
+  create type stage_status as enum ('scheduled', 'completed');
+exception when duplicate_object then null;
+end $$;
 
 -- 'auto' = entrou na lista da Final por estar entre os N primeiros do ranking.
 -- 'manual' = o admin convidou explicitamente (substituto de quem não pôde ir).
-create type invitee_source as enum ('auto', 'manual');
+do $$ begin
+  create type invitee_source as enum ('auto', 'manual');
+exception when duplicate_object then null;
+end $$;
 
 -- -----------------------------------------------------------------------------
 -- Temporadas
 -- -----------------------------------------------------------------------------
 
-create table seasons (
+create table if not exists seasons (
   id          uuid primary key default gen_random_uuid(),
   year        integer not null unique,
   name        text not null,
@@ -47,13 +62,13 @@ create table seasons (
 );
 
 -- No máximo uma temporada marcada como atual (índice parcial).
-create unique index seasons_single_current on seasons (is_current) where is_current;
+create unique index if not exists seasons_single_current on seasons (is_current) where is_current;
 
 -- -----------------------------------------------------------------------------
 -- Jogadores (globais)
 -- -----------------------------------------------------------------------------
 
-create table players (
+create table if not exists players (
   id               uuid primary key default gen_random_uuid(),
   full_name        text not null,
   type             player_type not null default 'indefinido',
@@ -74,13 +89,13 @@ create table players (
 
 -- Nome é a chave natural usada pelo seed (a planilha só tem nomes), então
 -- precisa ser único ignorando maiúsculas/minúsculas e espaços nas pontas.
-create unique index players_unique_name on players (lower(btrim(full_name)));
+create unique index if not exists players_unique_name on players (lower(btrim(full_name)));
 
 -- -----------------------------------------------------------------------------
 -- Etapas
 -- -----------------------------------------------------------------------------
 
-create table stages (
+create table if not exists stages (
   id                uuid primary key default gen_random_uuid(),
   season_id         uuid not null references seasons (id) on delete cascade,
   -- Numeração dentro da temporada. O nome exibido ("Etapa 7 - Jul/26") é
@@ -103,15 +118,15 @@ create table stages (
   unique (season_id, number)
 );
 
-create unique index stages_single_final   on stages (season_id) where is_final;
-create unique index stages_single_cutoff  on stages (season_id) where is_october_cutoff;
-create index        stages_by_season      on stages (season_id, event_date);
+create unique index if not exists stages_single_final  on stages (season_id) where is_final;
+create unique index if not exists stages_single_cutoff on stages (season_id) where is_october_cutoff;
+create index if not exists stages_by_season on stages (season_id, event_date);
 
 -- -----------------------------------------------------------------------------
 -- Participações / resultados
 -- -----------------------------------------------------------------------------
 
-create table stage_entries (
+create table if not exists stage_entries (
   id            uuid primary key default gen_random_uuid(),
   stage_id      uuid not null references stages (id) on delete cascade,
   player_id     uuid not null references players (id) on delete restrict,
@@ -147,14 +162,14 @@ create table stage_entries (
   unique (stage_id, player_id)
 );
 
-create index stage_entries_by_stage  on stage_entries (stage_id);
-create index stage_entries_by_player on stage_entries (player_id);
+create index if not exists stage_entries_by_stage  on stage_entries (stage_id);
+create index if not exists stage_entries_by_player on stage_entries (player_id);
 
 -- -----------------------------------------------------------------------------
 -- Configurações por temporada
 -- -----------------------------------------------------------------------------
 
-create table season_settings (
+create table if not exists season_settings (
   season_id           uuid primary key references seasons (id) on delete cascade,
 
   -- Valores financeiros padrão para novas etapas.
@@ -187,7 +202,7 @@ create table season_settings (
 
 -- Tabela de pontuação por colocação (1 a 15 no padrão da liga).
 -- Colocações não listadas caem em season_settings.points_below_cutoff.
-create table points_table (
+create table if not exists points_table (
   season_id  uuid not null references seasons (id) on delete cascade,
   placement  integer not null check (placement >= 1),
   points     integer not null check (points >= 0),
@@ -198,7 +213,7 @@ create table points_table (
 -- Lista de convidados da Etapa Final
 -- -----------------------------------------------------------------------------
 
-create table final_invitees (
+create table if not exists final_invitees (
   stage_id   uuid not null references stages (id) on delete cascade,
   player_id  uuid not null references players (id) on delete cascade,
   source     invitee_source not null default 'auto',
@@ -220,12 +235,16 @@ begin
 end;
 $$;
 
+drop trigger if exists players_touch on players;
 create trigger players_touch        before update on players
   for each row execute function set_updated_at();
+drop trigger if exists stages_touch on stages;
 create trigger stages_touch         before update on stages
   for each row execute function set_updated_at();
+drop trigger if exists stage_entries_touch on stage_entries;
 create trigger stage_entries_touch  before update on stage_entries
   for each row execute function set_updated_at();
+drop trigger if exists season_settings_touch on season_settings;
 create trigger season_settings_touch before update on season_settings
   for each row execute function set_updated_at();
 
@@ -249,26 +268,72 @@ alter table season_settings enable row level security;
 alter table points_table    enable row level security;
 alter table final_invitees  enable row level security;
 
+drop policy if exists "leitura publica de temporadas" on seasons;
 create policy "leitura publica de temporadas"
   on seasons for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica de jogadores" on players;
 create policy "leitura publica de jogadores"
   on players for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica de etapas" on stages;
 create policy "leitura publica de etapas"
   on stages for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica de participacoes" on stage_entries;
 create policy "leitura publica de participacoes"
   on stage_entries for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica de configuracoes" on season_settings;
 create policy "leitura publica de configuracoes"
   on season_settings for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica da tabela de pontos" on points_table;
 create policy "leitura publica da tabela de pontos"
   on points_table for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica dos convidados da final" on final_invitees;
 create policy "leitura publica dos convidados da final"
   on final_invitees for select to anon, authenticated using (true);
 
 -- Nenhuma política de INSERT/UPDATE/DELETE é criada de propósito:
 -- com RLS ativo e sem política, a escrita fica bloqueada para anon.
+
+
+-- =============================================================================
+-- Limite de tentativas de login no painel de admin
+-- =============================================================================
+-- Por que no banco e não em memória: a Vercel roda o app em várias instâncias
+-- serverless, criadas e destruídas o tempo todo. Um contador em memória seria
+-- por instância — quem tentasse várias vezes cairia em processos diferentes e
+-- passaria muito além do limite. Contador compartilhado precisa de estado
+-- compartilhado.
+-- =============================================================================
+
+create table if not exists admin_login_attempts (
+  id         uuid primary key default gen_random_uuid(),
+
+  -- HMAC do IP, não o IP em claro. Serve para agrupar tentativas da mesma
+  -- origem sem manter um registro de endereços de quem acessou o painel.
+  ip_hash    text not null,
+
+  succeeded  boolean not null,
+  created_at timestamptz not null default now()
+);
+
+-- A consulta quente é "falhas desta origem nos últimos minutos".
+create index if not exists admin_login_attempts_lookup
+  on admin_login_attempts (ip_hash, created_at desc);
+
+-- Para a limpeza periódica de registros antigos.
+create index if not exists admin_login_attempts_created_at
+  on admin_login_attempts (created_at);
+
+-- -----------------------------------------------------------------------------
+-- Segurança
+-- -----------------------------------------------------------------------------
+-- RLS ligado e NENHUMA política criada, de propósito: diferente das outras
+-- tabelas, esta não é de leitura pública. Só a chave service_role, usada no
+-- servidor, enxerga o histórico de tentativas.
+
+alter table admin_login_attempts enable row level security;

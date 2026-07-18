@@ -149,6 +149,8 @@ resultado limpa a marcação.
 | `npm run verificar:banco` | Planilha → seed → Supabase → queries do app → ranking |
 | `npm run verificar:rls` | Tenta escrever com a chave pública e falha se conseguir |
 | `npm run sql` | Junta as migrations num arquivo só, para colar no SQL Editor |
+| `npm run verificar:limite` | Testa o limite de tentativas de login contra o banco |
+| `npm run destravar` | Limpa o histórico de tentativas, se você se bloquear |
 
 O `verificar:banco` é o mais importante depois do seed: ele lê **do banco**, pelo mesmo código que
 roda em produção, e compara com a planilha. É o que prova que o dado sobreviveu à ida e volta.
@@ -341,3 +343,9 @@ liderança da Ligia com 174 pontos e os empates de 116 pontos entre Rodolfo e Ro
   por suspeita de vazamento deixaria o invasor logado por até 12 horas.
 - **Toda Server Action revalida a sessão**, não só o layout: proteger apenas a navegação deixaria
   os endpoints abertos a um POST direto.
+- **Três tentativas de login a cada 15 minutos**, por origem. O contador vive no banco
+  (`admin_login_attempts`), não em memória: a Vercel roda várias instâncias serverless, e um
+  contador por instância deixaria passar muito mais que três. O IP é guardado como HMAC, não em
+  claro. Tentativas feitas durante o bloqueio não são registradas — se fossem, a janela deslizante
+  renovaria o bloqueio a cada nova tentativa e ele nunca expiraria. Se você se trancar do lado de
+  fora, `npm run destravar` limpa o histórico.

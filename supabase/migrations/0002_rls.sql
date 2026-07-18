@@ -17,24 +17,31 @@ alter table season_settings enable row level security;
 alter table points_table    enable row level security;
 alter table final_invitees  enable row level security;
 
+drop policy if exists "leitura publica de temporadas" on seasons;
 create policy "leitura publica de temporadas"
   on seasons for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica de jogadores" on players;
 create policy "leitura publica de jogadores"
   on players for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica de etapas" on stages;
 create policy "leitura publica de etapas"
   on stages for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica de participacoes" on stage_entries;
 create policy "leitura publica de participacoes"
   on stage_entries for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica de configuracoes" on season_settings;
 create policy "leitura publica de configuracoes"
   on season_settings for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica da tabela de pontos" on points_table;
 create policy "leitura publica da tabela de pontos"
   on points_table for select to anon, authenticated using (true);
 
+drop policy if exists "leitura publica dos convidados da final" on final_invitees;
 create policy "leitura publica dos convidados da final"
   on final_invitees for select to anon, authenticated using (true);
 

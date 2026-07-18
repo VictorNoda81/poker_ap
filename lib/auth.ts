@@ -10,8 +10,15 @@
 
 import "server-only";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import {
+  JANELA_MINUTOS,
+  avaliarLimite,
+  type EstadoLimite,
+  type TentativaLogin,
+} from "./domain/rate-limit";
+import { getAdminClient } from "./supabase/admin";
 
 const COOKIE_NAME = "cap_poker_admin";
 const SESSION_DURATION_MS = 12 * 60 * 60 * 1000; // 12 horas
@@ -104,6 +111,79 @@ export async function isAdmin(): Promise<boolean> {
     return verifyToken(store.get(COOKIE_NAME)?.value);
   } catch {
     return false;
+  }
+}
+
+// ===========================================================================
+// Limite de tentativas
+// ===========================================================================
+
+/**
+ * Identifica a origem da tentativa por um HMAC do IP.
+ *
+ * Guardar o hash em vez do IP evita transformar a tabela num registro de
+ * endereços de quem acessou o painel, sem perder a capacidade de agrupar
+ * tentativas da mesma origem.
+ *
+ * Atrás da Vercel, o IP real vem em `x-forwarded-for` — o primeiro da lista,
+ * já que os seguintes são proxies intermediários.
+ */
+async function getOriginHash(): Promise<string> {
+  const store = await headers();
+  const forwarded = store.get("x-forwarded-for") ?? "";
+  const ip = forwarded.split(",")[0]?.trim() || store.get("x-real-ip") || "desconhecido";
+  return createHmac("sha256", getSessionSecret()).update(ip).digest("hex");
+}
+
+/** Estado atual do limite para quem está fazendo a requisição. */
+export async function checkRateLimit(): Promise<EstadoLimite> {
+  try {
+    const desde = new Date(Date.now() - JANELA_MINUTOS * 60_000).toISOString();
+
+    const { data, error } = await getAdminClient()
+      .from("admin_login_attempts")
+      .select("succeeded, created_at")
+      .eq("ip_hash", await getOriginHash())
+      .gte("created_at", desde)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+
+    const tentativas: TentativaLogin[] = (data ?? []).map((linha) => ({
+      at: new Date(linha.created_at as string),
+      succeeded: Boolean(linha.succeeded),
+    }));
+
+    return avaliarLimite(tentativas);
+  } catch {
+    // Falha ao consultar o banco não pode trancar o admin para fora: se o
+    // Supabase está indisponível, o painel não teria o que editar mesmo.
+    // Liberamos a tentativa — a senha continua sendo exigida.
+    return { bloqueado: false, restantes: 3, liberaEmSegundos: 0 };
+  }
+}
+
+/**
+ * Registra uma tentativa.
+ *
+ * Tentativas feitas DURANTE o bloqueio não entram: como a janela é deslizante,
+ * gravá-las renovaria o bloqueio a cada nova tentativa e ele nunca expiraria —
+ * inclusive para o dono da senha.
+ */
+export async function recordLoginAttempt(succeeded: boolean): Promise<void> {
+  try {
+    const db = getAdminClient();
+    await db.from("admin_login_attempts").insert({
+      ip_hash: await getOriginHash(),
+      succeeded,
+    });
+
+    // Limpeza oportunista: o histórico não serve para nada depois de 24h.
+    const ontem = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    await db.from("admin_login_attempts").delete().lt("created_at", ontem);
+  } catch {
+    // Não conseguir registrar não deve impedir o login de acontecer.
   }
 }
 
