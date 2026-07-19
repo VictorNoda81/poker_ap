@@ -17,7 +17,8 @@
     "verificar:banco": "tsx scripts/verificar-banco.ts",
     "verificar:rls": "tsx scripts/verificar-rls.ts",
     "verificar:limite": "tsx scripts/verificar-limite.ts",
-    "destravar": "tsx scripts/destravar-login.ts"
+    "destravar": "tsx scripts/destravar-login.ts",
+    "icones": "tsx scripts/gerar-icones.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

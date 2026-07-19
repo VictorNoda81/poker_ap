@@ -316,6 +316,39 @@ verificam contra os números reais da planilha.
 
 ---
 
+## App no celular (PWA)
+
+O site é um **Progressive Web App**: dá para instalar na tela de início e ele abre em janela
+própria, sem barra de endereço, com ícone e nome próprios.
+
+**Como instalar.** No Android/Chrome, um botão *Instalar app* aparece no rodapé. No iPhone, o
+Safari não expõe esse evento — toque em **Compartilhar → Adicionar à Tela de Início**; o botão no
+rodapé mostra essas instruções.
+
+**Offline.** Um service worker (`public/sw.js`) guarda os assets do build e as páginas já
+visitadas. Sem conexão, o app abre e mostra a última versão vista, com uma faixa avisando que os
+dados podem estar desatualizados. Páginas nunca abertas caem numa tela de "Sem conexão".
+
+O que **nunca** é cacheado: `/admin` e qualquer requisição que não seja GET. Painel administrativo
+com dado velho leva a lançar etapa errada.
+
+Dois detalhes que exigiram cuidado:
+
+- O `caches.match()` honra o cabeçalho `Vary` por padrão, e o Next responde com
+  `Vary: rsc, next-router-state-tree, …`. Como uma requisição de navegação carrega cabeçalhos
+  diferentes dos que estavam na resposta guardada, o match falhava em silêncio e o usuário via a
+  tela de erro do navegador. Por isso `{ ignoreVary: true }`.
+- `navigator.onLine` só reflete a interface de rede: com wifi ativo mas servidor inacessível, ele
+  continua `true`. O service worker avisa a página por `postMessage` quando entrega algo do cache,
+  para a faixa aparecer nesse caso também.
+
+Os ícones são gerados do logo do clube com `npm run icones`. Como o logo é 853×190 e tem o texto
+"CLUBE ALTO DOS PINHEIROS" à direita, o script recorta só a marca vermelha — o texto viraria
+borrão em 192px — e a centraliza sobre o fundo escuro do app. A variante *maskable* usa uma área
+menor, porque o Android recorta o ícone em círculo.
+
+---
+
 ## Testes
 
 ```bash
