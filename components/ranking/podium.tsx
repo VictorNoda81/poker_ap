@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { PlayerTypeBadge } from "@/components/ui/primitives";
 import { formatBRLSigned, formatNumber } from "@/lib/domain/money";
 import type { RankingRow } from "@/lib/domain/ranking";
 
@@ -27,65 +26,38 @@ function PodiumCard({ row, inProgress }: { row: RankingRow; inProgress: boolean 
   return (
     <Link
       href={`/jogadores/${row.player.id}`}
-      className={`card group flex flex-col p-4 transition-transform hover:-translate-y-0.5 ${style.ring}`}
+      className={`card group flex items-center gap-3 p-3 transition-transform hover:-translate-y-0.5 ${style.ring}`}
     >
-      {/* Etiqueta de posição — só texto, sem ornamentos. */}
-      <div className="flex items-center justify-between">
-        <span
-          className={`rounded-full px-2.5 py-1 text-[0.62rem] font-bold uppercase tracking-[0.14em] ${style.chip}`}
-        >
+      {/* Medalhão da posição. */}
+      <div
+        className={`tnum flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-full text-lg font-black leading-none ${style.chip}`}
+      >
+        {place}
+        <span className="text-[0.5rem] font-bold uppercase tracking-wide opacity-80">
           {label(place, inProgress)}
         </span>
-        <span className={`tnum text-2xl font-black leading-none ${style.accent}`}>{place}º</span>
       </div>
 
-      <p className="mt-3 text-lg font-extrabold leading-tight text-chalk group-hover:text-cap-red-light">
-        {row.player.fullName}
-      </p>
-      <div className="mt-1.5">
-        <PlayerTypeBadge
-          type={row.player.type}
-          memberNumber={row.player.memberNumber}
-          invitedByName={row.player.invitedByName}
-        />
+      {/* Nome + tipo. */}
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-bold leading-tight text-chalk group-hover:text-cap-red-light">
+          {row.player.fullName}
+        </p>
+        <p className="mt-1 truncate text-[0.7rem] text-chalk-dim">
+          {row.stagesPlayed} etapas · {row.wins} {row.wins === 1 ? "vitória" : "vitórias"}
+          {semFinanceiro ? "" : ` · ${formatBRLSigned(row.balance)}`}
+        </p>
       </div>
 
-      {/* Pontuação em destaque. */}
-      <div className="mt-3 flex items-baseline gap-1.5">
-        <span className={`tnum text-3xl font-black leading-none ${style.accent}`}>
+      {/* Pontos. */}
+      <div className="shrink-0 text-right">
+        <span className={`tnum block text-2xl font-black leading-none ${style.accent}`}>
           {formatNumber(row.totalPoints)}
         </span>
-        <span className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-chalk-dim">
+        <span className="text-[0.55rem] font-semibold uppercase tracking-[0.14em] text-chalk-dim">
           pontos
         </span>
       </div>
-
-      <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-center">
-        <div>
-          <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">Etapas</dt>
-          <dd className="tnum mt-0.5 text-sm font-bold text-chalk">{row.stagesPlayed}</dd>
-        </div>
-        <div>
-          <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">Vitórias</dt>
-          <dd className="tnum mt-0.5 text-sm font-bold text-chalk">{row.wins}</dd>
-        </div>
-        <div>
-          <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">Saldo</dt>
-          <dd
-            className={`tnum mt-0.5 text-sm font-bold ${
-              semFinanceiro
-                ? "text-chalk-dim"
-                : row.balance > 0
-                  ? "text-emerald-400"
-                  : row.balance < 0
-                    ? "text-cap-red-light"
-                    : "text-chalk-dim"
-            }`}
-          >
-            {semFinanceiro ? "—" : formatBRLSigned(row.balance)}
-          </dd>
-        </div>
-      </dl>
     </Link>
   );
 }

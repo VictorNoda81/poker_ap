@@ -79,7 +79,7 @@ export default async function HomePage({
         }
         action={
           <Link
-            href={`/temporadas/${season.year}`}
+            href="/etapas"
             className="inline-flex items-center gap-2 rounded-lg border border-ink-700 px-4 py-2 text-sm font-semibold text-chalk transition-colors hover:border-cap-red hover:text-cap-red-light"
           >
             Ver etapas da temporada

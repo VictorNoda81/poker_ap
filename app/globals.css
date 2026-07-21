@@ -18,28 +18,29 @@
   --color-cap-red-light: #ff3b40;
 
   /* Feltro da mesa */
-  --color-felt-900: #06231a;
-  --color-felt-800: #0a3226;
-  --color-felt-700: #0e4433;
-  --color-felt-600: #135941;
+  --color-felt-900: #0a3527;
+  --color-felt-800: #0e4332;
+  --color-felt-700: #12543e;
+  --color-felt-600: #1a6a4e;
 
-  /* Fundos escuros */
-  --color-ink-950: #08080a;
-  --color-ink-900: #0e0e12;
-  --color-ink-850: #15151b;
-  --color-ink-800: #1c1c24;
-  --color-ink-700: #2a2a34;
-  --color-ink-600: #3d3d4a;
+  /* Superfícies — verde-feltro escuro em vez de preto, para o clima de mesa
+     de poker sem perder a legibilidade do texto claro. */
+  --color-ink-950: #0a2b20; /* mais fundo: inputs, faixas */
+  --color-ink-900: #0d3427; /* cards */
+  --color-ink-850: #124030; /* hover de linha */
+  --color-ink-800: #1e4d3b; /* bordas */
+  --color-ink-700: #2c6049; /* bordas de input */
+  --color-ink-600: #3c7259;
 
   /* Pódio */
-  --color-gold: #d4af37;
-  --color-gold-bright: #f2ce5c;
-  --color-silver: #c6ccd2;
-  --color-bronze: #cd7f32;
+  --color-gold: #e0ba45;
+  --color-gold-bright: #f5d472;
+  --color-silver: #cfd6dc;
+  --color-bronze: #d68a45;
 
   /* Texto */
-  --color-chalk: #f4f4f6;
-  --color-chalk-dim: #a8a8b3;
+  --color-chalk: #f2f6f3;
+  --color-chalk-dim: #a6bcae;
 
   --font-display: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     sans-serif;
@@ -64,13 +65,14 @@ body {
   min-height: 100vh;
 }
 
-/* Feltro de mesa: gradiente radial esverdeado + granulado sutil, para o fundo
-   não ficar chapado. Puro CSS — sem imagem externa. */
+/* Feltro de mesa: base verde com um "holofote" mais claro no topo e um toque
+   de vermelho da marca. Mais claro que o preto anterior, puro CSS. */
 .felt-surface {
-  background-color: var(--color-ink-950);
+  background-color: #0f3d2d;
   background-image:
-    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(19, 89, 65, 0.35), transparent 70%),
-    radial-gradient(ellipse 70% 50% at 100% 0%, rgba(234, 17, 22, 0.1), transparent 60%);
+    radial-gradient(ellipse 115% 80% at 50% -15%, rgba(34, 138, 98, 0.65), transparent 72%),
+    radial-gradient(ellipse 80% 55% at 100% 0%, rgba(234, 17, 22, 0.12), transparent 60%),
+    linear-gradient(180deg, rgba(18, 84, 62, 0.35), rgba(8, 42, 31, 0.4));
 }
 
 .felt-panel {
@@ -99,6 +101,10 @@ body {
   background-color: var(--color-ink-900);
   border: 1px solid var(--color-ink-800);
   border-radius: var(--radius-card);
+  /* Leve elevação para o card "flutuar" sobre o feltro. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 10px 28px -20px rgba(0, 0, 0, 0.7);
 }
 
 /* Título de seção com o filete vermelho da marca. */

@@ -21,7 +21,7 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     // Cor da barra de status e da tela de abertura.
     theme_color: "#ea1116",
-    background_color: "#08080a",
+    background_color: "#0f3d2d",
     categories: ["sports", "entertainment"],
     icons: [
       {

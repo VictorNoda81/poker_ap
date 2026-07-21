@@ -20,7 +20,7 @@
  *     resposta de formulário cacheada é receita para bug difícil de achar.
  */
 
-const VERSAO = "v2";
+const VERSAO = "v3";
 const CACHE_ESTATICO = `cap-poker-estatico-${VERSAO}`;
 const CACHE_PAGINAS = `cap-poker-paginas-${VERSAO}`;
 const PAGINA_OFFLINE = "/offline";
@@ -141,7 +141,7 @@ self.addEventListener("fetch", (event) => {
           // ao respondWith (o que viraria erro de rede).
           return new Response(
             "<!doctype html><meta charset=utf-8><title>Sem conexão</title>" +
-              "<body style='background:#08080a;color:#f4f4f6;font-family:system-ui;" +
+              "<body style='background:#0f3d2d;color:#f2f6f3;font-family:system-ui;" +
               "display:grid;place-items:center;height:100vh;margin:0'>" +
               "<p>Sem conexão.</p>",
             { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } },
