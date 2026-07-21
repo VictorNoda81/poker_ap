@@ -132,7 +132,7 @@ jogador por etapa e o total do pote. Então:
 | Arrecadação total de cada etapa | ✅ deduzida da linha dos 10% |
 | Valor gasto por jogador | ❌ não existia nas planilhas |
 | Prêmio pago a cada jogador | ❌ não existia nas planilhas |
-| Sócio ou convidado, nº de sócio | ❌ todos entram como **“a definir”** |
+| Sócio ou convidado, nº de sócio | ⚠️ ver abaixo — os de 2026 vêm de uma planilha à parte |
 
 **Jogador é global entre temporadas.** O mesmo nome escrito de formas diferentes de um ano para
 outro ("André"/"ANDRE", "José Olimpio (JOB)"/"José Olimpio") vira um só cadastro: o casamento
@@ -147,6 +147,19 @@ Para fundir um novo apelido descoberto depois:
 2. Num banco já no ar, rode `npm run fundir -- --apply` — ele aplica o mapa às linhas existentes
    **sem re-semear** (re-semear zeraria valores gastos/prêmios já lançados pelo admin). O script é
    idempotente e descobre sozinho o que fundir agrupando os cadastros por `playerKey`.
+
+**Sócio × convidado.** O tipo de cada jogador não está nas planilhas de ranking. A planilha
+`data/2026-classificacao.xlsx` traz, ao lado de cada nome de 2026, um sufixo `- A` (associado =
+sócio) ou `- C` (convidado). Aplique com:
+
+```bash
+npm run classificar             # dry-run: mostra o que faria
+npm run classificar -- --apply  # grava
+```
+
+Casa cada nome ao cadastro por `playerKey` (os aliases resolvem "Wawa" → Wagner etc.), atualiza o
+tipo e é idempotente. Os ~97 jogadores que só aparecem em 2023–2025 seguem “a definir” até você
+classificá-los pelo painel de admin.
 
 **Anomalias marcadas para revisão.** Colocações duplicadas na mesma etapa, pontuações que não
 existem na tabela (typos como `42` em 2023 ou `16` em 2024) e jogadores lançados em duas linhas na
