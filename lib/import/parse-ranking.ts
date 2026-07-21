@@ -45,6 +45,24 @@ const MAX_DATE_SERIAL = 60_000;
 /** Sinais diacríticos que o NFD separa das letras (U+0300–U+036F). */
 const DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
 
+/**
+ * Apelidos confirmados pelo dono da liga como a mesma pessoa de um nome
+ * completo. A chave é o apelido puro (já normalizado); o valor é a chave do
+ * nome completo. Sem isto, "Wawa" (2025-26) e "Wagner (Wawa)" (2023-24) ficariam
+ * como dois cadastros, porque um não é acento nem parêntese do outro.
+ *
+ * É a fonte de verdade da fusão: como `playerKey` os unifica, um seed do zero
+ * reproduz o mesmo resultado — a fusão não depende de nenhum passo manual.
+ * Para fundir um novo apelido no futuro, some uma linha aqui.
+ */
+const NICKNAME_ALIASES: Record<string, string> = {
+  wawa: "wagner",
+  peu: "pedro lins",
+  armani: "andre armani",
+  armando: "joao armando",
+  pavelec: "daniel pavelec",
+};
+
 export interface ParsedStage {
   /** Número da etapa dentro da temporada (1, 2, 3...). */
   number: number;
@@ -120,13 +138,15 @@ export function normalizePlayerName(raw: string): string {
  * cadastros separados, porque uni-los exige conhecimento que a planilha não dá.
  */
 export function playerKey(name: string): string {
-  return name
+  const base = name
     .normalize("NFD")
     .replace(DIACRITICS, "") // tira os acentos
     .replace(/\([^)]*\)/g, "") // tira "(apelido)"
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+  // Um apelido confirmado resolve para a chave do nome completo.
+  return NICKNAME_ALIASES[base] ?? base;
 }
 
 function numberAt(sheet: XLSX.WorkSheet, address: string): number | null {

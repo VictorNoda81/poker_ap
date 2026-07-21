@@ -18,7 +18,8 @@
     "verificar:rls": "tsx scripts/verificar-rls.ts",
     "verificar:limite": "tsx scripts/verificar-limite.ts",
     "destravar": "tsx scripts/destravar-login.ts",
-    "icones": "tsx scripts/gerar-icones.ts"
+    "icones": "tsx scripts/gerar-icones.ts",
+    "fundir": "tsx scripts/fundir-jogadores.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

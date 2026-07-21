@@ -137,8 +137,16 @@ jogador por etapa e o total do pote. Então:
 **Jogador é global entre temporadas.** O mesmo nome escrito de formas diferentes de um ano para
 outro ("André"/"ANDRE", "José Olimpio (JOB)"/"José Olimpio") vira um só cadastro: o casamento
 ignora acento, caixa e apelido entre parênteses (`playerKey` em `lib/import/parse-ranking.ts`).
-Apelidos **puros** ("Wagner (Wawa)" × "Wawa") NÃO são fundidos automaticamente — uni-los exige
-conhecimento que a planilha não dá, então ficam como cadastros separados até você decidir.
+Apelidos **puros** ("Wagner (Wawa)" × "Wawa") não são deduzíveis da planilha, então há um mapa
+explícito de apelidos confirmados (`NICKNAME_ALIASES` no mesmo arquivo). Como `playerKey` os
+unifica, um seed do zero já reproduz a fusão — ela não depende de nenhum passo manual.
+
+Para fundir um novo apelido descoberto depois:
+
+1. Some uma linha em `NICKNAME_ALIASES` (`apelido` → chave do nome completo).
+2. Num banco já no ar, rode `npm run fundir -- --apply` — ele aplica o mapa às linhas existentes
+   **sem re-semear** (re-semear zeraria valores gastos/prêmios já lançados pelo admin). O script é
+   idempotente e descobre sozinho o que fundir agrupando os cadastros por `playerKey`.
 
 **Anomalias marcadas para revisão.** Colocações duplicadas na mesma etapa, pontuações que não
 existem na tabela (typos como `42` em 2023 ou `16` em 2024) e jogadores lançados em duas linhas na

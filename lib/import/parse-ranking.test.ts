@@ -42,11 +42,12 @@ describe.each([
     lider: ["André Armani", 373],
   },
   {
-    // 56, não 57: a planilha lista Fábio Segura em duas linhas (com e sem
-    // acento); o parser funde a mesma pessoa num só cadastro.
+    // 55: a planilha lista Fábio Segura em duas linhas (com/sem acento) e
+    // "João Armando"/"Armando" (apelido) também em duas — o parser funde cada
+    // pessoa num só cadastro.
     ano: 2024,
     arquivo: "2024.xlsx",
-    jogadores: 56,
+    jogadores: 55,
     etapas: 9,
     reserva: 5641,
     lider: null, // conferido só pelo total geral
@@ -159,9 +160,16 @@ describe("playerKey — identidade entre temporadas", () => {
     expect(playerKey("  RODOLFO   NEGRÃO ")).toBe("rodolfo negrao");
   });
 
-  it("NÃO funde apelidos puros — decisão que a planilha não permite tomar", () => {
-    // "Wagner (Wawa)" vira "wagner"; "Wawa" continua "wawa". Ficam separados.
-    expect(playerKey("Wagner (Wawa)")).not.toBe(playerKey("Wawa"));
+  it("funde apelidos confirmados pelo dono da liga (mapa de aliases)", () => {
+    expect(playerKey("Wagner (Wawa)")).toBe(playerKey("Wawa"));
+    expect(playerKey("Pedro Lins (Peu)")).toBe(playerKey("Peu"));
+    expect(playerKey("André Armani")).toBe(playerKey("Armani"));
+    expect(playerKey("João Armando")).toBe(playerKey("Armando"));
+    expect(playerKey("Daniel Pavelec")).toBe(playerKey("Pavelec"));
+  });
+
+  it("NÃO funde apelidos que não estão no mapa", () => {
+    expect(playerKey("Zeca")).not.toBe(playerKey("José da Silva"));
   });
 
   it("mantém pessoas diferentes separadas", () => {
