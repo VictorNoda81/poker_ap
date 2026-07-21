@@ -101,26 +101,28 @@ Cole o conteúdo de cada arquivo, rode, confira que deu certo, e só então pass
 > Se preferir usar a [Supabase CLI](https://supabase.com/docs/guides/cli):
 > `supabase link --project-ref <ref>` seguido de `supabase db push`.
 
-### 2. Importar a temporada 2026
+### 2. Importar as temporadas
 
-O arquivo `data/2026.xlsx` é a planilha original da liga. O seed lê essa planilha e popula o banco:
+Os arquivos `data/2023.xlsx` … `data/2026.xlsx` são as planilhas originais da liga. O seed lê todas
+e popula o banco:
 
 ```bash
 npm run seed
 ```
 
 Ele é **idempotente** — pode rodar quantas vezes quiser, que atualiza em vez de duplicar. Ao final
-imprime um resumo para conferência:
+imprime um resumo por temporada:
 
 ```
-Jogadores ............. 56
-Etapas ................ 7
-Participações ......... 171
-Líder do ranking ...... Ligia (174 pontos)
-Reserva da Final ...... R$ 5.210
+Jogadores distintos ... 158
+Participações ......... 811
+2023   67 jogadores  10 etapas  líder André Armani (373)
+2024   56 jogadores   9 etapas  líder André Armani (196)
+2025   69 jogadores   9 etapas  líder Vitor Tateshita (263)
+2026   56 jogadores   7 etapas  líder Ligia (174)      (atual)
 ```
 
-**O que o seed importa e o que não importa.** A planilha registrava apenas a *pontuação* de cada
+**O que o seed importa e o que não importa.** As planilhas registravam apenas a *pontuação* de cada
 jogador por etapa e o total do pote. Então:
 
 | Dado | Vem do seed? |
@@ -128,17 +130,20 @@ jogador por etapa e o total do pote. Então:
 | Jogadores, etapas, pontos por etapa | ✅ |
 | Colocação de cada jogador | ✅ derivada dos pontos (55 → 1º, 48 → 2º, …) |
 | Arrecadação total de cada etapa | ✅ deduzida da linha dos 10% |
-| Valor gasto por jogador | ❌ não existia na planilha |
-| Prêmio pago a cada jogador | ❌ não existia na planilha |
+| Valor gasto por jogador | ❌ não existia nas planilhas |
+| Prêmio pago a cada jogador | ❌ não existia nas planilhas |
 | Sócio ou convidado, nº de sócio | ❌ todos entram como **“a definir”** |
 
-Os dois últimos blocos são preenchidos pelo painel de admin. As etapas com pendência aparecem
-destacadas em `/admin`.
+**Jogador é global entre temporadas.** O mesmo nome escrito de formas diferentes de um ano para
+outro ("André"/"ANDRE", "José Olimpio (JOB)"/"José Olimpio") vira um só cadastro: o casamento
+ignora acento, caixa e apelido entre parênteses (`playerKey` em `lib/import/parse-ranking.ts`).
+Apelidos **puros** ("Wagner (Wawa)" × "Wawa") NÃO são fundidos automaticamente — uni-los exige
+conhecimento que a planilha não dá, então ficam como cadastros separados até você decidir.
 
-**Colocações duplicadas.** A planilha de Jan/26 tem dois jogadores com 28 pontos e dois com 20 —
-ou seja, dois “6º lugares” e dois “8º lugares”. São erros de digitação do arquivo original. O seed
-importa os quatro e marca a participação como **“revisar”**; abrir a etapa no admin e salvar o
-resultado limpa a marcação.
+**Anomalias marcadas para revisão.** Colocações duplicadas na mesma etapa, pontuações que não
+existem na tabela (typos como `42` em 2023 ou `16` em 2024) e jogadores lançados em duas linhas na
+mesma planilha (Fábio Segura em 2024) são preservados e marcados como **“revisar”**; as etapas
+afetadas aparecem em `/admin` sob “Pendências”. Abrir a etapa e salvar o resultado limpa a marcação.
 
 ### 3. Conferir os números
 

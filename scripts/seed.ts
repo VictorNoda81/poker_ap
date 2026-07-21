@@ -1,36 +1,43 @@
 /**
- * Seed da temporada 2026 a partir de `data/2026.xlsx`.
+ * Seed das temporadas a partir das planilhas em `data/` (2023 a 2026).
  *
  *   npm run seed
  *
- * É IDEMPOTENTE: pode rodar quantas vezes quiser. Tudo usa upsert com chave
- * natural (ano da temporada, nome do jogador, número da etapa, par etapa+jogador),
- * então rodar de novo atualiza em vez de duplicar.
+ * É IDEMPOTENTE: pode rodar quantas vezes quiser. Usa chaves naturais (ano da
+ * temporada, número da etapa, par etapa+jogador) e casa jogadores por uma chave
+ * de identidade que ignora acento/apelido, então rodar de novo atualiza em vez
+ * de duplicar.
+ *
+ * Identidade de jogador entre temporadas:
+ *   Os nomes variam de um ano para outro ("André"/"ANDRE", "José Olimpio (JOB)"
+ *   /"José Olimpio"). `playerKey` normaliza isso para que a mesma pessoa vire um
+ *   só cadastro global. Apelidos PUROS ("Wagner (Wawa)" × "Wawa") continuam
+ *   separados — uni-los exige conhecimento que a planilha não dá.
  *
  * O que ele NÃO faz, de propósito:
- *   - Não inventa valor gasto nem prêmio por jogador. A planilha não tem esse
- *     dado; só o total do pote por etapa. Preencha pelo painel de admin, na
- *     tela de lançamento retroativo.
- *   - Não classifica ninguém como sócio ou convidado: todo mundo entra como
- *     "indefinido", destacado no admin até você definir.
+ *   - Não inventa valor gasto nem prêmio por jogador. As planilhas não têm esse
+ *     dado; só o total do pote por etapa. Preencha pelo painel de admin.
+ *   - Não classifica ninguém como sócio ou convidado: todos entram como
+ *     "indefinido", destacados no admin até você definir.
  */
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { parse2026Workbook, type Parsed2026 } from "../lib/import/parse-2026";
+import { parseRankingWorkbook, playerKey, type ParsedRanking } from "../lib/import/parse-ranking";
 import { normalizeSupabaseUrl } from "../lib/supabase/url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
-const WORKBOOK = path.join(ROOT, "data", "2026.xlsx");
+const DATA = path.join(ROOT, "data");
 
-// .env.local tem precedência (padrão do Next), depois .env.
 loadEnv({ path: path.join(ROOT, ".env.local") });
 loadEnv({ path: path.join(ROOT, ".env") });
 
-const SEASON_YEAR = 2026;
+/** Anos a importar e qual é a temporada atual (a que abre na home). */
+const SEASONS = [2023, 2024, 2025, 2026];
+const CURRENT_YEAR = 2026;
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -47,23 +54,45 @@ function fail(step: string, error: { message: string } | null): never {
   process.exit(1);
 }
 
-async function seedSeason(db: SupabaseClient, parsed: Parsed2026) {
-  console.log(`→ Temporada ${SEASON_YEAR}`);
+/** Quantas letras acentuadas o nome tem — usado para escolher a melhor grafia. */
+function contarAcentos(nome: string): number {
+  return (nome.match(/[^\x00-\x7F]/g) ?? []).length;
+}
 
+/**
+ * Para cada chave de identidade, escolhe a MELHOR grafia entre todas as vistas:
+ * a com mais acentos, depois a mais longa (que costuma trazer o apelido). Assim
+ * "André Echeverria" vence "Andre Echeverria", e "José Olimpio (JOB)" vence
+ * "José Olimpio".
+ */
+function escolherGrafias(todosOsNomes: string[]): Map<string, string> {
+  const melhor = new Map<string, string>();
+  for (const nome of todosOsNomes) {
+    const key = playerKey(nome);
+    const atual = melhor.get(key);
+    if (
+      !atual ||
+      contarAcentos(nome) > contarAcentos(atual) ||
+      (contarAcentos(nome) === contarAcentos(atual) && nome.length > atual.length)
+    ) {
+      melhor.set(key, nome);
+    }
+  }
+  return melhor;
+}
+
+async function seedSeason(db: SupabaseClient, year: number, parsed: ParsedRanking) {
   const { data: season, error } = await db
     .from("seasons")
     .upsert(
-      { year: SEASON_YEAR, name: `Temporada ${SEASON_YEAR}`, is_current: true },
+      { year, name: `Temporada ${year}`, is_current: year === CURRENT_YEAR },
       { onConflict: "year" },
     )
     .select()
     .single();
-  if (error) fail("criar temporada", error);
-
+  if (error) fail(`criar temporada ${year}`, error);
   const seasonId = season!.id as string;
 
-  // Configurações padrão da liga. `ignoreDuplicates` para não sobrescrever
-  // ajustes que o admin já tenha feito ao rodar o seed de novo.
   const { error: settingsError } = await db.from("season_settings").upsert(
     {
       season_id: seasonId,
@@ -77,6 +106,7 @@ async function seedSeason(db: SupabaseClient, parsed: Parsed2026) {
       points_below_cutoff: parsed.pointsBelowCutoff,
       final_invite_count: 20,
     },
+    // ignoreDuplicates: não sobrescreve ajustes que o admin já tenha feito.
     { onConflict: "season_id", ignoreDuplicates: true },
   );
   if (settingsError) fail("gravar configurações", settingsError);
@@ -91,46 +121,52 @@ async function seedSeason(db: SupabaseClient, parsed: Parsed2026) {
     .upsert(pointsRows, { onConflict: "season_id,placement" });
   if (pointsError) fail("gravar tabela de pontuação", pointsError);
 
-  console.log(`  ✓ configurações e tabela de pontuação (${pointsRows.length} colocações)`);
   return seasonId;
 }
 
-async function seedPlayers(db: SupabaseClient, parsed: Parsed2026) {
-  console.log(`→ Jogadores (${parsed.players.length})`);
+/**
+ * Garante que todos os jogadores de todas as temporadas existam no banco,
+ * casando por `playerKey`. Devolve o mapa chave -> id.
+ */
+async function seedPlayers(
+  db: SupabaseClient,
+  todosOsNomes: string[],
+): Promise<Map<string, string>> {
+  const grafias = escolherGrafias(todosOsNomes);
 
-  const rows = parsed.players.map((full_name) => ({ full_name, type: "indefinido" as const }));
-
-  // O índice único é sobre lower(btrim(full_name)), que o PostgREST não aceita
-  // como alvo de onConflict. Então buscamos o que já existe e inserimos só o resto.
+  // Jogadores já no banco, indexados pela chave de identidade.
   const { data: existing, error: readError } = await db.from("players").select("id, full_name");
   if (readError) fail("ler jogadores", readError);
 
-  const byName = new Map<string, string>();
+  const keyToId = new Map<string, string>();
   for (const row of existing ?? []) {
-    byName.set(String(row.full_name).trim().toLowerCase(), row.id as string);
+    keyToId.set(playerKey(String(row.full_name)), row.id as string);
   }
 
-  const missing = rows.filter((r) => !byName.has(r.full_name.toLowerCase()));
-  if (missing.length > 0) {
-    const { data: inserted, error } = await db.from("players").insert(missing).select("id, full_name");
+  const faltando = [...grafias.entries()].filter(([key]) => !keyToId.has(key));
+  if (faltando.length > 0) {
+    const { data: inserted, error } = await db
+      .from("players")
+      .insert(faltando.map(([, full_name]) => ({ full_name, type: "indefinido" as const })))
+      .select("id, full_name");
     if (error) fail("inserir jogadores", error);
     for (const row of inserted ?? []) {
-      byName.set(String(row.full_name).trim().toLowerCase(), row.id as string);
+      keyToId.set(playerKey(String(row.full_name)), row.id as string);
     }
   }
 
-  console.log(`  ✓ ${missing.length} novos, ${rows.length - missing.length} já existiam`);
-  return byName;
+  console.log(
+    `→ Jogadores: ${grafias.size} distintos ` +
+      `(${faltando.length} novos, ${grafias.size - faltando.length} já existiam)`,
+  );
+  return keyToId;
 }
 
-async function seedStages(db: SupabaseClient, seasonId: string, parsed: Parsed2026) {
-  console.log(`→ Etapas (${parsed.stages.length})`);
-
+async function seedStages(db: SupabaseClient, seasonId: string, parsed: ParsedRanking) {
   const rows = parsed.stages.map((stage) => ({
     season_id: seasonId,
     number: stage.number,
     event_date: stage.date,
-    // Sem arrecadação registrada = etapa que ainda não aconteceu.
     status: stage.grossAmount === null ? ("scheduled" as const) : ("completed" as const),
     gross_amount_override: stage.grossAmount,
   }));
@@ -143,23 +179,18 @@ async function seedStages(db: SupabaseClient, seasonId: string, parsed: Parsed20
 
   const byNumber = new Map<number, string>();
   for (const row of data ?? []) byNumber.set(row.number as number, row.id as string);
-
-  const realizadas = rows.filter((r) => r.status === "completed").length;
-  console.log(`  ✓ ${realizadas} realizadas, ${rows.length - realizadas} agendada(s)`);
   return byNumber;
 }
 
 async function seedEntries(
   db: SupabaseClient,
-  parsed: Parsed2026,
-  playerIds: Map<string, string>,
+  parsed: ParsedRanking,
+  keyToId: Map<string, string>,
   stageIds: Map<number, string>,
-) {
-  console.log(`→ Participações (${parsed.results.length})`);
-
+): Promise<number> {
   const rows = parsed.results.map((result) => {
     const stageId = stageIds.get(result.stageNumber);
-    const playerId = playerIds.get(result.playerName.toLowerCase());
+    const playerId = keyToId.get(playerKey(result.playerName));
     if (!stageId) throw new Error(`Etapa ${result.stageNumber} não encontrada.`);
     if (!playerId) throw new Error(`Jogador "${result.playerName}" não encontrado.`);
 
@@ -168,7 +199,6 @@ async function seedEntries(
       player_id: playerId,
       placement: result.placement,
       points: result.points,
-      // amount_paid e prize_amount ficam vazios: a planilha não trazia esse dado.
       amount_paid: null,
       prize_amount: 0,
       needs_review: result.needsReview,
@@ -176,7 +206,6 @@ async function seedEntries(
     };
   });
 
-  // Em lotes, para não estourar o limite de payload do PostgREST.
   const BATCH = 500;
   for (let i = 0; i < rows.length; i += BATCH) {
     const { error } = await db
@@ -185,9 +214,7 @@ async function seedEntries(
     if (error) fail("gravar participações", error);
   }
 
-  const revisar = rows.filter((r) => r.needs_review).length;
-  console.log(`  ✓ ${rows.length} participações (${revisar} marcadas para revisão)`);
-  return revisar;
+  return rows.filter((r) => r.needs_review).length;
 }
 
 async function main() {
@@ -197,37 +224,60 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  console.log(`\nLendo ${path.relative(ROOT, WORKBOOK)}...\n`);
-  const parsed = parse2026Workbook(WORKBOOK);
+  // Lê todas as planilhas primeiro, para escolher a melhor grafia de cada
+  // jogador considerando todas as temporadas de uma vez.
+  console.log("\nLendo planilhas...");
+  const temporadas = SEASONS.map((year) => {
+    const arquivo = path.join(DATA, `${year}.xlsx`);
+    return { year, parsed: parseRankingWorkbook(arquivo) };
+  });
 
-  const seasonId = await seedSeason(db, parsed);
-  const playerIds = await seedPlayers(db, parsed);
-  const stageIds = await seedStages(db, seasonId, parsed);
-  const revisar = await seedEntries(db, parsed, playerIds, stageIds);
+  const todosOsNomes = temporadas.flatMap((t) => t.parsed.players);
+  const keyToId = await seedPlayers(db, todosOsNomes);
 
-  // --- Conferência final, contra os números da própria planilha -------------
-  const reservaTotal = parsed.stages.reduce((sum, s) => sum + (s.reserveAmount ?? 0), 0);
-  const lider = [...parsed.spreadsheetTotals.entries()].sort((a, b) => b[1] - a[1])[0];
+  let totalParticipacoes = 0;
+  let totalRevisar = 0;
+
+  console.log("");
+  for (const { year, parsed } of temporadas) {
+    const seasonId = await seedSeason(db, year, parsed);
+    const stageIds = await seedStages(db, seasonId, parsed);
+    const revisar = await seedEntries(db, parsed, keyToId, stageIds);
+
+    const reserva = parsed.stages.reduce((s, e) => s + (e.reserveAmount ?? 0), 0);
+    const lider = [...parsed.spreadsheetTotals.entries()].sort((a, b) => b[1] - a[1])[0];
+
+    totalParticipacoes += parsed.results.length;
+    totalRevisar += revisar;
+
+    console.log(
+      `→ ${year}${year === CURRENT_YEAR ? " (atual)" : "       "}  ` +
+        `${String(parsed.players.length).padStart(2)} jogadores  ` +
+        `${String(parsed.stages.length).padStart(2)} etapas  ` +
+        `${String(parsed.results.length).padStart(3)} participações  ` +
+        `líder ${lider[0]} (${lider[1]})  ` +
+        `reserva R$ ${reserva.toLocaleString("pt-BR")}` +
+        (revisar > 0 ? `  ⚠ ${revisar} a revisar` : ""),
+    );
+  }
 
   console.log("\n────────────────────────────────────────────");
   console.log("Seed concluído.");
-  console.log(`  Jogadores ............. ${parsed.players.length}`);
-  console.log(`  Etapas ................ ${parsed.stages.length}`);
-  console.log(`  Participações ......... ${parsed.results.length}`);
-  console.log(`  Líder do ranking ...... ${lider[0]} (${lider[1]} pontos)`);
-  console.log(`  Reserva da Final ...... R$ ${reservaTotal.toLocaleString("pt-BR")}`);
+  console.log(`  Temporadas ............ ${temporadas.length}`);
+  console.log(`  Jogadores distintos ... ${keyToId.size}`);
+  console.log(`  Participações ......... ${totalParticipacoes}`);
   console.log("────────────────────────────────────────────");
 
-  if (revisar > 0) {
+  if (totalRevisar > 0) {
     console.log(
-      `\n⚠ ${revisar} participações ficaram marcadas para revisão (colocações\n` +
-        `  duplicadas na planilha original). As etapas afetadas aparecem em\n` +
-        `  /admin sob "Pendências" — abra a etapa e confira as colocações.`,
+      `\n⚠ ${totalRevisar} participações marcadas para revisão (colocações duplicadas\n` +
+        `  ou pontuações fora da tabela nas planilhas originais). As etapas afetadas\n` +
+        `  aparecem em /admin sob "Pendências".`,
     );
   }
   console.log(
-    "\nℹ Valores gastos e prêmios das etapas passadas não vieram na planilha.\n" +
-      "  Preencha em /admin/etapas > Lançamento retroativo.\n",
+    "\nℹ Valores gastos e prêmios das etapas passadas não vieram nas planilhas.\n" +
+      "  Preencha em /admin/etapas quando quiser.\n",
   );
 }
 
