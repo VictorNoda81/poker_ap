@@ -96,7 +96,7 @@ export default async function EtapaPage({ params }: Params) {
           }
         />
         <StatCard
-          label={stage.isFinal ? "Sem nova reserva" : "Reserva da Final"}
+          label={stage.isFinal ? "Sem nova reserva" : "Reserva da Etapa Final"}
           value={stage.isFinal ? "—" : formatBRL(stage.reserve)}
           hint={stage.isFinal ? "A Final distribui o acumulado" : undefined}
           tone="gold"

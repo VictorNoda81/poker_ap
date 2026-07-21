@@ -43,6 +43,7 @@ export default async function TemporadaPage({ params }: Params) {
   const realizadas = stages.filter((s) => s.status === "completed");
   const jogadoresAtivos = ranking.filter((r) => r.stagesPlayed > 0).length;
   const final = stages.find((s) => s.isFinal);
+  const inProgress = stages.some((s) => s.status === "scheduled");
 
   return (
     <>
@@ -76,7 +77,7 @@ export default async function TemporadaPage({ params }: Params) {
         />
       ) : (
         <>
-          <Podium rows={ranking} />
+          <Podium rows={ranking} inProgress={inProgress} />
           <div className="section-title mb-4">Classificação da temporada</div>
           <RankingTable rows={ranking} />
         </>

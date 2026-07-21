@@ -450,3 +450,81 @@ export async function listPlayers(): Promise<RankingPlayer[]> {
   if (error) throw new Error(`Erro ao listar jogadores: ${error.message}`);
   return ((data ?? []) as PlayerRow[]).map(mapPlayer);
 }
+
+export interface PlayerSeasonStat {
+  year: number;
+  position: number;
+  points: number;
+  stagesPlayed: number;
+  wins: number;
+  totalPaid: number;
+  totalReceived: number;
+  balance: number;
+  averagePoints: number;
+  averagePlacement: number | null;
+  bestPlacement: number | null;
+}
+
+export interface PlayerAcrossSeasons {
+  player: RankingPlayer;
+  /** Estatística de cada temporada em que participou (ano -> stat). */
+  bySeasonYear: Record<number, PlayerSeasonStat>;
+}
+
+/**
+ * Estatísticas de todos os jogadores em todas as temporadas, para o diretório
+ * de jogadores poder filtrar por temporada e somar o histórico. Um jogador só
+ * ganha entrada de um ano em que efetivamente participou.
+ */
+export async function getPlayersAcrossSeasons(): Promise<{
+  seasons: { year: number; name: string }[];
+  players: PlayerAcrossSeasons[];
+}> {
+  const seasons = await listSeasons();
+
+  // As temporadas são independentes — carrega todas em paralelo.
+  const bundles = await Promise.all(
+    seasons.map(async (season) => ({ season, bundle: await getSeasonBundle(season) })),
+  );
+
+  const byId = new Map<string, PlayerAcrossSeasons>();
+  const ensure = (player: RankingPlayer): PlayerAcrossSeasons => {
+    let entry = byId.get(player.id);
+    if (!entry) {
+      entry = { player, bySeasonYear: {} };
+      byId.set(player.id, entry);
+    }
+    return entry;
+  };
+
+  for (const { season, bundle } of bundles) {
+    for (const row of bundle.ranking) {
+      // Garante que todo jogador cadastrado apareça, mesmo sem participação —
+      // mas só registra o ano quando ele jogou.
+      const entry = ensure(row.player);
+      if (row.stagesPlayed === 0) continue;
+      entry.bySeasonYear[season.year] = {
+        year: season.year,
+        position: row.position,
+        points: row.totalPoints,
+        stagesPlayed: row.stagesPlayed,
+        wins: row.wins,
+        totalPaid: row.totalPaid,
+        totalReceived: row.totalReceived,
+        balance: row.balance,
+        averagePoints: row.averagePoints,
+        averagePlacement: row.averagePlacement,
+        bestPlacement: row.bestPlacement,
+      };
+    }
+  }
+
+  const players = [...byId.values()].sort((a, b) =>
+    a.player.fullName.localeCompare(b.player.fullName, "pt-BR"),
+  );
+
+  return {
+    seasons: seasons.map((s) => ({ year: s.year, name: s.name })),
+    players,
+  };
+}

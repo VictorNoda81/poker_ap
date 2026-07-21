@@ -1,64 +1,48 @@
 import Link from "next/link";
-import { ChipIcon, MedalIcon, TrophyIcon } from "@/components/brand/icons";
 import { PlayerTypeBadge } from "@/components/ui/primitives";
 import { formatBRLSigned, formatNumber } from "@/lib/domain/money";
 import type { RankingRow } from "@/lib/domain/ranking";
 
 const PODIUM_STYLE = {
-  1: {
-    ring: "podium-gold",
-    text: "text-gold-bright",
-    glow: "from-gold/20",
-    label: "Campeão",
-  },
-  2: {
-    ring: "podium-silver",
-    text: "text-silver",
-    glow: "from-silver/15",
-    label: "Vice",
-  },
-  3: {
-    ring: "podium-bronze",
-    text: "text-bronze",
-    glow: "from-bronze/15",
-    label: "Terceiro",
-  },
+  1: { accent: "text-gold-bright", ring: "podium-gold", chip: "bg-gold/15 text-gold-bright" },
+  2: { accent: "text-silver", ring: "podium-silver", chip: "bg-silver/15 text-silver" },
+  3: { accent: "text-bronze", ring: "podium-bronze", chip: "bg-bronze/15 text-bronze" },
 } as const;
 
-function PodiumCard({ row }: { row: RankingRow }) {
+/** Rótulo do 1º lugar: "Líder" enquanto a temporada corre; "Campeão" quando fecha. */
+function firstPlaceLabel(inProgress: boolean): string {
+  return inProgress ? "Líder" : "Campeão";
+}
+
+function label(place: 1 | 2 | 3, inProgress: boolean): string {
+  if (place === 1) return firstPlaceLabel(inProgress);
+  return place === 2 ? "Vice" : "3º lugar";
+}
+
+function PodiumCard({ row, inProgress }: { row: RankingRow; inProgress: boolean }) {
   const place = row.position as 1 | 2 | 3;
   const style = PODIUM_STYLE[place];
+  const semFinanceiro = row.totalPaid === 0 && row.totalReceived === 0;
 
   return (
     <Link
       href={`/jogadores/${row.player.id}`}
-      className={`card felt-grain group relative overflow-hidden p-5 transition-transform hover:-translate-y-0.5 ${style.ring}`}
+      className={`card group flex flex-col p-4 transition-transform hover:-translate-y-0.5 ${style.ring}`}
     >
-      <div
-        className={`pointer-events-none absolute inset-x-0 -top-16 h-32 bg-gradient-to-b ${style.glow} to-transparent blur-2xl`}
-      />
-
-      <div className="relative flex items-start justify-between gap-3">
+      {/* Etiqueta de posição — só texto, sem ornamentos. */}
+      <div className="flex items-center justify-between">
         <span
-          className={`inline-flex items-center gap-1.5 text-[0.65rem] font-bold uppercase tracking-[0.18em] ${style.text}`}
+          className={`rounded-full px-2.5 py-1 text-[0.62rem] font-bold uppercase tracking-[0.14em] ${style.chip}`}
         >
-          {place === 1 ? (
-            <TrophyIcon className="h-4 w-4" title="Líder do ranking" />
-          ) : (
-            <MedalIcon className="h-4 w-4" place={place} />
-          )}
-          {style.label}
+          {label(place, inProgress)}
         </span>
-        <span className={`tnum text-3xl font-black leading-none ${style.text} opacity-30`}>
-          {place}º
-        </span>
+        <span className={`tnum text-2xl font-black leading-none ${style.accent}`}>{place}º</span>
       </div>
 
-      <p className="relative mt-3 text-lg font-extrabold leading-tight text-chalk group-hover:text-cap-red-light">
+      <p className="mt-3 text-lg font-extrabold leading-tight text-chalk group-hover:text-cap-red-light">
         {row.player.fullName}
       </p>
-
-      <div className="relative mt-2">
+      <div className="mt-1.5">
         <PlayerTypeBadge
           type={row.player.type}
           memberNumber={row.player.memberNumber}
@@ -66,39 +50,39 @@ function PodiumCard({ row }: { row: RankingRow }) {
         />
       </div>
 
-      <div className="relative mt-4 flex items-end justify-between gap-3">
-        <div>
-          <p className={`tnum text-3xl font-black leading-none ${style.text}`}>
-            {formatNumber(row.totalPoints)}
-          </p>
-          <p className="mt-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-chalk-dim">
-            pontos
-          </p>
-        </div>
-        <ChipIcon className={`h-9 w-9 opacity-25 ${style.text}`} />
+      {/* Pontuação em destaque. */}
+      <div className="mt-3 flex items-baseline gap-1.5">
+        <span className={`tnum text-3xl font-black leading-none ${style.accent}`}>
+          {formatNumber(row.totalPoints)}
+        </span>
+        <span className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-chalk-dim">
+          pontos
+        </span>
       </div>
 
-      <dl className="relative mt-4 grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-center">
+      <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-center">
         <div>
-          <dt className="text-[0.6rem] uppercase tracking-wider text-chalk-dim">Etapas</dt>
+          <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">Etapas</dt>
           <dd className="tnum mt-0.5 text-sm font-bold text-chalk">{row.stagesPlayed}</dd>
         </div>
         <div>
-          <dt className="text-[0.6rem] uppercase tracking-wider text-chalk-dim">Vitórias</dt>
+          <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">Vitórias</dt>
           <dd className="tnum mt-0.5 text-sm font-bold text-chalk">{row.wins}</dd>
         </div>
         <div>
-          <dt className="text-[0.6rem] uppercase tracking-wider text-chalk-dim">Saldo</dt>
+          <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">Saldo</dt>
           <dd
             className={`tnum mt-0.5 text-sm font-bold ${
-              row.balance > 0
-                ? "text-emerald-400"
-                : row.balance < 0
-                  ? "text-cap-red-light"
-                  : "text-chalk-dim"
+              semFinanceiro
+                ? "text-chalk-dim"
+                : row.balance > 0
+                  ? "text-emerald-400"
+                  : row.balance < 0
+                    ? "text-cap-red-light"
+                    : "text-chalk-dim"
             }`}
           >
-            {row.totalPaid === 0 && row.totalReceived === 0 ? "—" : formatBRLSigned(row.balance)}
+            {semFinanceiro ? "—" : formatBRLSigned(row.balance)}
           </dd>
         </div>
       </dl>
@@ -106,30 +90,19 @@ function PodiumCard({ row }: { row: RankingRow }) {
   );
 }
 
-/** Destaque dos três primeiros do ranking. */
-export function Podium({ rows }: { rows: RankingRow[] }) {
+/**
+ * Destaque dos três primeiros do ranking, em cards iguais (1-2-3 da esquerda
+ * para a direita, sem o efeito de pódio escalonado que confundia a leitura).
+ */
+export function Podium({ rows, inProgress }: { rows: RankingRow[]; inProgress: boolean }) {
   const top = rows.filter((row) => row.stagesPlayed > 0).slice(0, 3);
   if (top.length === 0) return null;
 
   return (
-    <section aria-label="Pódio" className="mb-8">
-      {/* No celular a ordem é 1-2-3; no desktop o campeão fica no centro, mais alto. */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        {top.map((row) => (
-          <div
-            key={row.player.id}
-            className={
-              row.position === 1
-                ? "sm:order-2 sm:-mt-3"
-                : row.position === 2
-                  ? "sm:order-1 sm:mt-2"
-                  : "sm:order-3 sm:mt-2"
-            }
-          >
-            <PodiumCard row={row} />
-          </div>
-        ))}
-      </div>
+    <section aria-label="Destaques" className="mb-8 grid gap-3 sm:grid-cols-3">
+      {top.map((row) => (
+        <PodiumCard key={row.player.id} row={row} inProgress={inProgress} />
+      ))}
     </section>
   );
 }

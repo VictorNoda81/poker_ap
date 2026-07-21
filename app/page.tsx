@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChipIcon, TrophyIcon } from "@/components/brand/icons";
 import { Podium } from "@/components/ranking/podium";
 import { RankingTable } from "@/components/ranking/ranking-table";
+import { SeasonTabs } from "@/components/season-tabs";
 import {
   EmptyState,
   ErrorNotice,
@@ -9,7 +10,7 @@ import {
   SetupNotice,
   StatCard,
 } from "@/components/ui/primitives";
-import { getCurrentSeason, getSeasonBundle } from "@/lib/db/queries";
+import { getCurrentSeason, getSeasonBundle, listSeasons } from "@/lib/db/queries";
 import { load } from "@/lib/db/load";
 import { formatBRL, formatNumber } from "@/lib/domain/money";
 import { formatShortDate, stageName } from "@/lib/domain/stage-name";
@@ -17,18 +18,27 @@ import { formatShortDate, stageName } from "@/lib/domain/stage-name";
 // O ranking muda a cada lançamento do admin — sempre renderiza na hora.
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ temporada?: string }>;
+}) {
+  const { temporada } = await searchParams;
+  const anoPedido = Number(temporada);
+
   const result = await load(async () => {
-    const season = await getCurrentSeason();
-    if (!season) return null;
-    return getSeasonBundle(season);
+    const seasons = await listSeasons();
+    if (seasons.length === 0) return null;
+    // A temporada da URL, senão a atual, senão a mais recente.
+    const season =
+      seasons.find((s) => s.year === anoPedido) ?? (await getCurrentSeason()) ?? seasons[0];
+    return { seasons, bundle: await getSeasonBundle(season) };
   });
 
   if (result.status === "unconfigured") return <SetupNotice />;
   if (result.status === "error") return <ErrorNotice message={result.message} />;
 
-  const bundle = result.data;
-  if (!bundle) {
+  if (!result.data) {
     return (
       <EmptyState
         title="Nenhuma temporada cadastrada"
@@ -37,10 +47,13 @@ export default async function HomePage() {
     );
   }
 
+  const { seasons, bundle } = result.data;
   const { season, ranking, stages, accumulatedReserve, totals, settings } = bundle;
   const realizadas = stages.filter((s) => s.status === "completed");
   const proxima = stages.find((s) => s.status === "scheduled");
   const jogadoresAtivos = ranking.filter((r) => r.stagesPlayed > 0).length;
+  // Em andamento = ainda há etapa por disputar. Define "Líder" vs "Campeão".
+  const inProgress = stages.some((s) => s.status === "scheduled");
 
   return (
     <>
@@ -73,6 +86,8 @@ export default async function HomePage() {
           </Link>
         }
       />
+
+      <SeasonTabs seasons={seasons} selectedYear={season.year} basePath="/" />
 
       {/* Números da temporada. */}
       <section className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -108,7 +123,7 @@ export default async function HomePage() {
         />
       ) : (
         <>
-          <Podium rows={ranking} />
+          <Podium rows={ranking} inProgress={inProgress} />
           <div className="section-title mb-4">Classificação geral</div>
           <RankingTable rows={ranking} />
           <p className="mt-4 text-xs leading-relaxed text-chalk-dim">

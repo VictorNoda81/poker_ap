@@ -1,6 +1,6 @@
 import { PlayersDirectory } from "@/components/players-directory";
 import { EmptyState, ErrorNotice, PageHeading, SetupNotice } from "@/components/ui/primitives";
-import { getCurrentSeason, getSeasonBundle } from "@/lib/db/queries";
+import { getPlayersAcrossSeasons } from "@/lib/db/queries";
 import { load } from "@/lib/db/load";
 
 export const dynamic = "force-dynamic";
@@ -8,22 +8,20 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Jogadores" };
 
 export default async function JogadoresPage() {
-  const result = await load(async () => {
-    const season = await getCurrentSeason();
-    if (!season) return null;
-    return getSeasonBundle(season);
-  });
+  const result = await load(getPlayersAcrossSeasons);
 
   if (result.status === "unconfigured") return <SetupNotice />;
   if (result.status === "error") return <ErrorNotice message={result.message} />;
 
-  if (!result.data || result.data.ranking.length === 0) {
+  const { seasons, players } = result.data;
+
+  if (players.length === 0) {
     return (
       <>
         <PageHeading title="Jogadores" />
         <EmptyState
           title="Nenhum jogador cadastrado"
-          description="Cadastre jogadores no painel de administração ou rode o seed para importar a temporada 2026."
+          description="Cadastre jogadores no painel de administração ou rode o seed para importar as temporadas."
         />
       </>
     );
@@ -32,11 +30,11 @@ export default async function JogadoresPage() {
   return (
     <>
       <PageHeading
-        eyebrow={result.data.season.name}
+        eyebrow="Histórico"
         title="Jogadores"
-        subtitle="Os números mostrados são da temporada atual. Abra um jogador para ver o histórico completo."
+        subtitle="Filtre por temporada (várias ao mesmo tempo) ou escolha “Todas” para o histórico completo. Abra um jogador para ver etapa a etapa."
       />
-      <PlayersDirectory rows={result.data.ranking} />
+      <PlayersDirectory seasons={seasons} players={players} />
     </>
   );
 }
