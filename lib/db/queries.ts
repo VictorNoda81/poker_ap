@@ -462,6 +462,10 @@ export interface PlayerSeasonStat {
   balance: number;
   averagePoints: number;
   averagePlacement: number | null;
+  /** Soma das colocações registradas e nº de etapas com colocação — para
+   *  reagregar as médias quando o usuário seleciona várias temporadas. */
+  placementSum: number;
+  placedStages: number;
   bestPlacement: number | null;
 }
 
@@ -514,6 +518,8 @@ export async function getPlayersAcrossSeasons(): Promise<{
         balance: row.balance,
         averagePoints: row.averagePoints,
         averagePlacement: row.averagePlacement,
+        placementSum: row.placementSum,
+        placedStages: row.placedStages,
         bestPlacement: row.bestPlacement,
       };
     }

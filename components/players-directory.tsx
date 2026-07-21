@@ -12,7 +12,14 @@ function normalize(text: string): string {
   return text.normalize("NFD").replace(DIACRITICS, "").toLowerCase();
 }
 
-type Order = "nome" | "pontos";
+type Order = "nome" | "pontos" | "media" | "classificacao";
+
+const ORDER_LABELS: Record<Order, string> = {
+  nome: "Nome",
+  pontos: "Pontos",
+  media: "Média pts",
+  classificacao: "Class. média",
+};
 
 interface Aggregate {
   points: number;
@@ -23,9 +30,19 @@ interface Aggregate {
   balance: number;
   seasonsPlayed: number;
   bestPosition: number | null;
+  /** Pontos por etapa jogada, no conjunto de temporadas selecionado. */
+  avgPoints: number;
+  /** Colocação média por etapa com posição registrada. null se nenhuma. */
+  avgPlacement: number | null;
 }
 
-/** Soma as estatísticas do jogador nas temporadas selecionadas. */
+/**
+ * Soma as estatísticas do jogador nas temporadas selecionadas.
+ *
+ * As MÉDIAS são recalculadas a partir das somas brutas (pontos/etapas e
+ * soma-de-colocações/etapas-colocadas) — nunca a média das médias, que daria
+ * peso errado a temporadas com menos etapas.
+ */
 function aggregate(player: PlayerAcrossSeasons, years: Set<number>): Aggregate {
   const agg: Aggregate = {
     points: 0,
@@ -36,7 +53,11 @@ function aggregate(player: PlayerAcrossSeasons, years: Set<number>): Aggregate {
     balance: 0,
     seasonsPlayed: 0,
     bestPosition: null,
+    avgPoints: 0,
+    avgPlacement: null,
   };
+  let placementSum = 0;
+  let placedStages = 0;
   for (const stat of Object.values(player.bySeasonYear)) {
     if (!years.has(stat.year)) continue;
     agg.points += stat.points;
@@ -47,10 +68,16 @@ function aggregate(player: PlayerAcrossSeasons, years: Set<number>): Aggregate {
     agg.seasonsPlayed += 1;
     agg.bestPosition =
       agg.bestPosition === null ? stat.position : Math.min(agg.bestPosition, stat.position);
+    placementSum += stat.placementSum;
+    placedStages += stat.placedStages;
   }
   agg.balance = agg.totalReceived - agg.totalPaid;
+  agg.avgPoints = agg.stagesPlayed > 0 ? agg.points / agg.stagesPlayed : 0;
+  agg.avgPlacement = placedStages > 0 ? placementSum / placedStages : null;
   return agg;
 }
+
+type Linha = { player: PlayerAcrossSeasons; agg: Aggregate };
 
 /**
  * Diretório de jogadores com filtro por temporada.
@@ -92,17 +119,31 @@ export function PlayersDirectory({
 
   const linhas = useMemo(() => {
     const needle = normalize(query.trim());
+    const porNome = (a: Linha, b: Linha) =>
+      a.player.player.fullName.localeCompare(b.player.player.fullName, "pt-BR");
+
     return players
       .map((player) => ({ player, agg: aggregate(player, selected) }))
       // Só quem participou de ao menos uma temporada selecionada.
       .filter(({ agg }) => agg.seasonsPlayed > 0)
       .filter(({ player }) => !needle || normalize(player.player.fullName).includes(needle))
-      .sort((a, b) =>
-        order === "nome"
-          ? a.player.player.fullName.localeCompare(b.player.player.fullName, "pt-BR")
-          : b.agg.points - a.agg.points ||
-            a.player.player.fullName.localeCompare(b.player.player.fullName, "pt-BR"),
-      );
+      .sort((a, b) => {
+        switch (order) {
+          case "nome":
+            return porNome(a, b);
+          case "media":
+            // Mais pontos por etapa primeiro.
+            return b.agg.avgPoints - a.agg.avgPoints || porNome(a, b);
+          case "classificacao": {
+            // Melhor (menor) colocação média primeiro; sem colocação vai ao fim.
+            const av = a.agg.avgPlacement ?? Number.POSITIVE_INFINITY;
+            const bv = b.agg.avgPlacement ?? Number.POSITIVE_INFINITY;
+            return av - bv || porNome(a, b);
+          }
+          default: // pontos
+            return b.agg.points - a.agg.points || porNome(a, b);
+        }
+      });
   }, [players, selected, query, order]);
 
   return (
@@ -157,21 +198,21 @@ export function PlayersDirectory({
           />
         </label>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-chalk-dim">Ordenar por</span>
-          {(["pontos", "nome"] as Order[]).map((value) => (
+          {(["pontos", "media", "classificacao", "nome"] as Order[]).map((value) => (
             <button
               key={value}
               type="button"
               onClick={() => setOrder(value)}
               aria-pressed={order === value}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize transition-colors ${
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
                 order === value
                   ? "border-cap-red bg-cap-red/15 text-cap-red-light"
                   : "border-ink-700 text-chalk-dim hover:border-ink-600 hover:text-chalk"
               }`}
             >
-              {value}
+              {ORDER_LABELS[value]}
             </button>
           ))}
         </div>
@@ -261,6 +302,26 @@ export function PlayersDirectory({
                         }`}
                       >
                         {semFinanceiro ? "—" : formatBRLSigned(agg.balance)}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  {/* Médias por etapa jogada. */}
+                  <dl className="grid grid-cols-2 gap-2 border-t border-white/5 pt-3 text-center">
+                    <div>
+                      <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">
+                        Média pts
+                      </dt>
+                      <dd className="tnum mt-0.5 text-sm font-bold text-chalk">
+                        {formatNumber(agg.avgPoints, 1)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">
+                        Class. média
+                      </dt>
+                      <dd className="tnum mt-0.5 text-sm font-bold text-chalk">
+                        {agg.avgPlacement === null ? "—" : `${formatNumber(agg.avgPlacement, 1)}º`}
                       </dd>
                     </div>
                   </dl>

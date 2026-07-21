@@ -77,6 +77,10 @@ describe("buildRanking", () => {
     expect(ana.averagePoints).toBe(26.5); // (48 + 5) / 2
     expect(ana.averagePlacement).toBe(2); // só a etapa com colocação registrada
     expect(ana.bestPlacement).toBe(2);
+    // Somas brutas expostas para reagregar médias entre temporadas: a etapa
+    // "16º+" fica de fora da soma de colocações e da contagem de etapas colocadas.
+    expect(ana.placementSum).toBe(2);
+    expect(ana.placedStages).toBe(1);
   });
 
   it("conta etapas sem valor gasto informado, sem somar zero no total pago", () => {

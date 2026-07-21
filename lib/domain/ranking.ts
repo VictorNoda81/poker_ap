@@ -51,6 +51,10 @@ export interface RankingRow {
   averagePlacement: number | null;
   /** Média só das etapas em que jogou. */
   averagePoints: number;
+  /** Soma das colocações registradas — para reagregar médias entre temporadas. */
+  placementSum: number;
+  /** Nº de etapas com colocação registrada (exclui "16º ou pior"). */
+  placedStages: number;
   /** Melhor colocação da temporada (menor número). null se nenhuma registrada. */
   bestPlacement: number | null;
   wins: number;
@@ -125,6 +129,8 @@ export function buildRanking(
       balance: round2(totalReceived - totalPaid),
       averagePlacement: placementCount > 0 ? placementSum / placementCount : null,
       averagePoints: stagesPlayed > 0 ? totalPoints / stagesPlayed : 0,
+      placementSum,
+      placedStages: placementCount,
       bestPlacement,
       wins,
       seconds,
