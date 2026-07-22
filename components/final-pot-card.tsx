@@ -44,7 +44,7 @@ export function FinalPotCard({
         <div className="rounded-lg border border-ink-800 bg-ink-950 p-4">
           <p className="flex items-center gap-2 text-[0.68rem] font-bold uppercase tracking-[0.16em] text-chalk-dim">
             <ChipIcon className="h-4 w-4 text-chalk-dim/40" />
-            Mesa da Etapa Final
+            Etapa Final
           </p>
           <p className="tnum mt-2 text-xl font-extrabold text-gold">{formatBRL(pot.stagePot)}</p>
           <p className="mt-1 text-xs text-chalk-dim">
