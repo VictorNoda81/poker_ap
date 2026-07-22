@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChipIcon, TrophyIcon } from "@/components/brand/icons";
+import { FinalPotCard } from "@/components/final-pot-card";
 import { Podium } from "@/components/ranking/podium";
 import { RankingTable } from "@/components/ranking/ranking-table";
 import { SeasonTabs } from "@/components/season-tabs";
@@ -48,7 +49,7 @@ export default async function HomePage({
   }
 
   const { seasons, bundle } = result.data;
-  const { season, ranking, stages, accumulatedReserve, totals, settings } = bundle;
+  const { season, ranking, stages, accumulatedReserve, finalPot, totals, settings } = bundle;
   const realizadas = stages.filter((s) => s.status === "completed");
   const proxima = stages.find((s) => s.status === "scheduled");
   const jogadoresAtivos = ranking.filter((r) => r.stagesPlayed > 0).length;
@@ -103,7 +104,7 @@ export default async function HomePage({
           icon={<ChipIcon className="h-5 w-5" />}
         />
         <StatCard
-          label="Pote da Etapa Final"
+          label="Pote Acumulado"
           value={formatBRL(accumulatedReserve)}
           hint={`${formatNumber(settings.finalReservePct, 0)}% de cada etapa`}
           tone="gold"
@@ -124,7 +125,15 @@ export default async function HomePage({
       ) : (
         <>
           <Podium rows={ranking} inProgress={inProgress} />
-          <div className="section-title mb-4">Classificação geral</div>
+          <FinalPotCard
+            pot={finalPot}
+            ranking={ranking}
+            rankingSharePct={settings.rankingSharePct}
+            inProgress={inProgress}
+          />
+          <div id="classificacao" className="section-title mb-4">
+            Classificação geral
+          </div>
           <RankingTable rows={ranking} />
           <p className="mt-4 text-xs leading-relaxed text-chalk-dim">
             <strong className="text-chalk-dim/90">Pago</strong> é o total que o jogador gastou

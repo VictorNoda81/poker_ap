@@ -68,6 +68,7 @@ export function StageResultsEditor({
   initialEntries,
   isFinal,
   accumulatedReserve,
+  rankingShare = 0,
   initialGrossOverride,
   initialAdminFeePerPlayer,
   initialOtherCosts,
@@ -79,7 +80,13 @@ export function StageResultsEditor({
   initialEntries: EditorEntry[];
   isFinal: boolean;
   /** Reserva acumulada da temporada — só usada na Etapa Final. */
+  /**
+   * Na Etapa Final: o pote que vai de fato para a MESA — já sem a parte dos
+   * líderes do ranking. Ver `splitFinalPot`.
+   */
   accumulatedReserve: number;
+  /** Só para exibição: quanto do acumulado foi separado para os líderes. */
+  rankingShare?: number;
   initialGrossOverride: number | null;
   /** null = usa a taxa padrão da temporada. */
   initialAdminFeePerPlayer: number | null;
@@ -566,7 +573,15 @@ export function StageResultsEditor({
           <Metric label="Outros custos" value={`− ${formatBRL(breakdown.otherCosts)}`} />
           <Metric label="Prêmio do 5º" value={`− ${formatBRL(breakdown.fifthPrize)}`} />
           {isFinal ? (
-            <Metric label="Reserva acumulada" value={formatBRL(accumulatedReserve)} tone="gold" />
+            <Metric
+              label={
+                rankingShare > 0
+                  ? `Pote na mesa (acumulado − ${formatBRL(rankingShare)} dos líderes)`
+                  : "Pote acumulado na mesa"
+              }
+              value={formatBRL(accumulatedReserve)}
+              tone="gold"
+            />
           ) : (
             <Metric
               label={`Reserva Etapa Final (${settings.finalReservePct}% de ${formatBRL(breakdown.reserveBase)})`}

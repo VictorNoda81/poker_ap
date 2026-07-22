@@ -8,7 +8,12 @@
  */
 
 import { round2 } from "@/lib/domain/money";
-import { suggestStagePrizes, type PrizeSettings } from "@/lib/domain/prizes";
+import {
+  splitFinalPot,
+  suggestStagePrizes,
+  type FinalPotSplit,
+  type PrizeSettings,
+} from "@/lib/domain/prizes";
 import {
   buildRanking,
   derivePlacements,
@@ -44,6 +49,10 @@ export const FALLBACK_SETTINGS: SeasonSettings = {
   secondPct: 27,
   thirdPct: 18,
   fourthPct: 13,
+  rankingSharePct: 50,
+  rankingFirstPct: 50,
+  rankingSecondPct: 30,
+  rankingThirdPct: 20,
   pointsBelowCutoff: 5,
   finalInviteCount: 20,
 };
@@ -92,8 +101,10 @@ export interface SeasonBundle {
   players: RankingPlayer[];
   entries: RankingEntry[];
   ranking: RankingRow[];
-  /** Total acumulado dos 10% para a Etapa Final. */
+  /** Total acumulado dos 10% de todas as etapas. */
   accumulatedReserve: number;
+  /** Como esse acumulado se divide entre líderes do ranking e mesa da Final. */
+  finalPot: FinalPotSplit;
   /** Quanto da reserva já foi pago na Etapa Final (se ela já aconteceu). */
   totals: {
     gross: number;
@@ -124,6 +135,10 @@ function mapSettings(row: SeasonSettingsRow | null): SeasonSettings {
     secondPct: toNumberOr(row.prize_second_pct, FALLBACK_SETTINGS.secondPct),
     thirdPct: toNumberOr(row.prize_third_pct, FALLBACK_SETTINGS.thirdPct),
     fourthPct: toNumberOr(row.prize_fourth_pct, FALLBACK_SETTINGS.fourthPct),
+    rankingSharePct: toNumberOr(row.ranking_share_pct, FALLBACK_SETTINGS.rankingSharePct),
+    rankingFirstPct: toNumberOr(row.ranking_first_pct, FALLBACK_SETTINGS.rankingFirstPct),
+    rankingSecondPct: toNumberOr(row.ranking_second_pct, FALLBACK_SETTINGS.rankingSecondPct),
+    rankingThirdPct: toNumberOr(row.ranking_third_pct, FALLBACK_SETTINGS.rankingThirdPct),
     pointsBelowCutoff: row.points_below_cutoff ?? FALLBACK_SETTINGS.pointsBelowCutoff,
     finalInviteCount: row.final_invite_count ?? FALLBACK_SETTINGS.finalInviteCount,
   };
@@ -281,6 +296,17 @@ export async function getSeasonBundle(season: SeasonRow): Promise<SeasonBundle> 
   const players = playerRows.map(mapPlayer);
   const ranking = buildRanking(players, entries);
 
+  // Divisão do Pote Acumulado. As colocações premiadas do ranking se limitam a
+  // quantos jogadores a temporada tem — numa temporada de dois, os 20% do 3º
+  // não somem: são redistribuídos entre 1º e 2º.
+  const comPartidas = ranking.filter((r) => r.stagesPlayed > 0).length;
+  const accumulatedReserve = round2(stages.reduce((sum, s) => sum + s.reserve, 0));
+  const finalPot = splitFinalPot(
+    accumulatedReserve,
+    settings,
+    [1, 2, 3].slice(0, Math.min(3, comPartidas)),
+  );
+
   return {
     season,
     settings,
@@ -289,7 +315,8 @@ export async function getSeasonBundle(season: SeasonRow): Promise<SeasonBundle> 
     players,
     entries,
     ranking,
-    accumulatedReserve: stages.reduce((sum, s) => sum + s.reserve, 0),
+    accumulatedReserve,
+    finalPot,
     totals: {
       gross: stages.reduce((sum, s) => sum + s.gross, 0),
       prizesPaid: stages.reduce((sum, s) => sum + s.prizesPaid, 0),

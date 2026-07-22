@@ -75,6 +75,10 @@ export interface SeasonSettingsRow {
   prize_third_pct: string | number;
   prize_fourth_pct: string | number;
   admin_fee_per_player: string | number;
+  ranking_share_pct: string | number;
+  ranking_first_pct: string | number;
+  ranking_second_pct: string | number;
+  ranking_third_pct: string | number;
   points_below_cutoff: number;
   final_invite_count: number;
   updated_at: string;

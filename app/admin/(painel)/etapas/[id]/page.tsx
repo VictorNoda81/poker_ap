@@ -7,6 +7,8 @@ import { TrophyIcon } from "@/components/brand/icons";
 import { BackLink, ErrorNotice, SetupNotice } from "@/components/ui/primitives";
 import { getStageDetail, listPlayers, getSeasonBundle, getSeasonByYear } from "@/lib/db/queries";
 import { load } from "@/lib/db/load";
+import { round2 } from "@/lib/domain/money";
+import { splitFinalPot } from "@/lib/domain/prizes";
 import { formatLongDate, stageName } from "@/lib/domain/stage-name";
 
 export const dynamic = "force-dynamic";
@@ -58,10 +60,17 @@ export default async function AdminEtapa({ params, searchParams }: Params) {
     reviewNote: entry.reviewNote,
   }));
 
-  // Reserva acumulada nas demais etapas — é o bolo que a Final distribui.
-  const accumulatedReserve = bundle.stages
-    .filter((s) => s.id !== stage.id)
-    .reduce((sum, s) => sum + s.reserve, 0);
+  // Reserva acumulada nas demais etapas. Só uma FATIA dela vai para a mesa da
+  // Final — o resto premia os líderes do ranking (ver `splitFinalPot`).
+  const accumulatedReserve = round2(
+    bundle.stages.filter((s) => s.id !== stage.id).reduce((sum, s) => sum + s.reserve, 0),
+  );
+  const comPartidas = bundle.ranking.filter((r) => r.stagesPlayed > 0).length;
+  const finalPot = splitFinalPot(
+    accumulatedReserve,
+    bundle.settings,
+    [1, 2, 3].slice(0, Math.min(3, comPartidas)),
+  );
 
   return (
     <>
@@ -169,11 +178,16 @@ export default async function AdminEtapa({ params, searchParams }: Params) {
           thirdPct: bundle.settings.thirdPct,
           fourthPct: bundle.settings.fourthPct,
           pointsBelowCutoff: bundle.settings.pointsBelowCutoff,
+          rankingSharePct: bundle.settings.rankingSharePct,
+          rankingFirstPct: bundle.settings.rankingFirstPct,
+          rankingSecondPct: bundle.settings.rankingSecondPct,
+          rankingThirdPct: bundle.settings.rankingThirdPct,
         }}
         pointsTable={bundle.pointsTable}
         initialEntries={entries}
         isFinal={stage.isFinal}
-        accumulatedReserve={accumulatedReserve}
+        accumulatedReserve={finalPot.stagePot}
+        rankingShare={finalPot.rankingShare}
         initialGrossOverride={stage.grossIsManual ? stage.gross : null}
         initialAdminFeePerPlayer={stage.adminFeePerPlayer}
         initialOtherCosts={stage.otherCosts}

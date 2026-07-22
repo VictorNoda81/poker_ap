@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { round2 } from "./money";
 import {
   DEFAULT_PRIZE_SETTINGS,
   computeReserve,
+  splitFinalPot,
   suggestFinalPrizes,
   suggestStagePrizes,
   validatePrizeDistribution,
@@ -190,5 +192,78 @@ describe("validação da premiação (aviso não-bloqueante)", () => {
   it("aceita divisão combinada fora do padrão, desde que a soma feche", () => {
     const check = validatePrizeDistribution(10000, 2300, 739, [3000, 1700, 1100, 851, 310]);
     expect(check.balanced).toBe(true);
+  });
+});
+
+describe("splitFinalPot — divisão do Pote Acumulado", () => {
+  it("separa metade para os líderes do ranking e metade para a mesa", () => {
+    const split = splitFinalPot(5210, DEFAULT_PRIZE_SETTINGS);
+    expect(split.accumulated).toBe(5210);
+    expect(split.rankingShare).toBe(2605);
+    expect(split.stagePot).toBe(2605);
+  });
+
+  it("reparte a parte dos líderes em 50 / 30 / 20", () => {
+    const split = splitFinalPot(5210, DEFAULT_PRIZE_SETTINGS);
+    expect(split.byRankingPlace).toEqual([
+      { place: 1, amount: 1302.5 },
+      { place: 2, amount: 781.5 },
+      { place: 3, amount: 521 },
+    ]);
+  });
+
+  it("a soma dos prêmios do ranking fecha exatamente com a parte dos líderes", () => {
+    // Valor escolhido para dar dízima: 33% de 1/3 não fecha por arredondamento
+    // ingênuo, e é justamente o que a alocação em centavos evita.
+    const split = splitFinalPot(1000.01, DEFAULT_PRIZE_SETTINGS);
+    const soma = split.byRankingPlace.reduce((s, p) => s + p.amount, 0);
+    expect(round2(soma)).toBe(split.rankingShare);
+    expect(round2(split.rankingShare + split.stagePot)).toBe(split.accumulated);
+  });
+
+  it("percentuais são configuráveis por temporada", () => {
+    const split = splitFinalPot(10000, {
+      ...DEFAULT_PRIZE_SETTINGS,
+      rankingSharePct: 30,
+      rankingFirstPct: 60,
+      rankingSecondPct: 40,
+      rankingThirdPct: 0,
+    });
+    expect(split.rankingShare).toBe(3000);
+    expect(split.stagePot).toBe(7000);
+    expect(split.byRankingPlace).toEqual([
+      { place: 1, amount: 1800 },
+      { place: 2, amount: 1200 },
+    ]);
+  });
+
+  it("0% para os líderes devolve o pote inteiro para a mesa", () => {
+    const split = splitFinalPot(5210, { ...DEFAULT_PRIZE_SETTINGS, rankingSharePct: 0 });
+    expect(split.stagePot).toBe(5210);
+    expect(split.rankingShare).toBe(0);
+    expect(split.byRankingPlace.every((p) => p.amount === 0)).toBe(true);
+  });
+
+  it("colocação que não existe tem o percentual redistribuído, sem sumir dinheiro", () => {
+    // Temporada com dois jogadores: os 20% do 3º voltam para 1º e 2º.
+    const split = splitFinalPot(1000, DEFAULT_PRIZE_SETTINGS, [1, 2]);
+    expect(split.rankingShare).toBe(500);
+    expect(split.byRankingPlace).toEqual([
+      { place: 1, amount: 312.5 }, // 50/80 de 500
+      { place: 2, amount: 187.5 }, // 30/80 de 500
+    ]);
+  });
+
+  it("sem ninguém a premiar, a parte dos líderes volta para a mesa", () => {
+    const split = splitFinalPot(5210, DEFAULT_PRIZE_SETTINGS, []);
+    expect(split.rankingShare).toBe(0);
+    expect(split.stagePot).toBe(5210);
+    expect(split.byRankingPlace).toEqual([]);
+  });
+
+  it("percentual fora da faixa não cria nem destrói dinheiro", () => {
+    const split = splitFinalPot(1000, { ...DEFAULT_PRIZE_SETTINGS, rankingSharePct: 150 });
+    expect(split.rankingShare).toBe(1000);
+    expect(split.stagePot).toBe(0);
   });
 });

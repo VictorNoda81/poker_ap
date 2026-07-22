@@ -349,6 +349,11 @@ export async function saveStageResults(formData: FormData): Promise<void> {
 // Configurações da temporada
 // ===========================================================================
 
+/** A coluna tem CHECK 0..100; sem isto um erro de digitação vira erro do banco. */
+function clampPct(value: number): number {
+  return Math.min(100, Math.max(0, value));
+}
+
 export async function saveSettings(formData: FormData): Promise<void> {
   await requireAdmin();
   const db = getAdminClient();
@@ -370,6 +375,10 @@ export async function saveSettings(formData: FormData): Promise<void> {
       prize_third_pct: number(formData, "premio3", 18),
       prize_fourth_pct: number(formData, "premio4", 13),
       admin_fee_per_player: number(formData, "taxaAdmin", 60),
+      ranking_share_pct: clampPct(number(formData, "rankingShare", 50)),
+      ranking_first_pct: number(formData, "ranking1", 50),
+      ranking_second_pct: number(formData, "ranking2", 30),
+      ranking_third_pct: number(formData, "ranking3", 20),
       points_below_cutoff: Math.trunc(number(formData, "pontosAbaixo", 5)),
       final_invite_count: Math.trunc(number(formData, "convidadosFinal", 20)),
     },

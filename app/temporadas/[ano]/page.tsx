@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { TrophyIcon } from "@/components/brand/icons";
+import { FinalPotCard } from "@/components/final-pot-card";
 import { Podium } from "@/components/ranking/podium";
 import { RankingTable } from "@/components/ranking/ranking-table";
 import { StagesList } from "@/components/stages-list";
@@ -39,7 +40,7 @@ export default async function TemporadaPage({ params }: Params) {
   if (result.status === "error") return <ErrorNotice message={result.message} />;
   if (!result.data) notFound();
 
-  const { season, ranking, stages, accumulatedReserve, totals, settings } = result.data;
+  const { season, ranking, stages, accumulatedReserve, finalPot, totals, settings } = result.data;
   const realizadas = stages.filter((s) => s.status === "completed");
   const jogadoresAtivos = ranking.filter((r) => r.stagesPlayed > 0).length;
   const final = stages.find((s) => s.isFinal);
@@ -61,7 +62,7 @@ export default async function TemporadaPage({ params }: Params) {
         <StatCard label="Participações" value={formatNumber(totals.participations)} />
         <StatCard label="Arrecadação total" value={formatBRL(totals.gross)} />
         <StatCard
-          label={final ? "Pote distribuído na Final" : "Pote da Etapa Final"}
+          label={final ? "Pote Acumulado distribuído" : "Pote Acumulado"}
           value={formatBRL(accumulatedReserve)}
           hint={`${formatNumber(settings.finalReservePct, 0)}% de cada etapa`}
           tone="gold"
@@ -78,7 +79,15 @@ export default async function TemporadaPage({ params }: Params) {
       ) : (
         <>
           <Podium rows={ranking} inProgress={inProgress} />
-          <div className="section-title mb-4">Classificação da temporada</div>
+          <FinalPotCard
+            pot={finalPot}
+            ranking={ranking}
+            rankingSharePct={settings.rankingSharePct}
+            inProgress={inProgress}
+          />
+          <div id="classificacao" className="section-title mb-4">
+            Classificação da temporada
+          </div>
           <RankingTable rows={ranking} />
         </>
       )}

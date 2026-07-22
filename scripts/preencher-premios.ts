@@ -73,6 +73,11 @@ async function main() {
     buyin: Number(cfg?.buyin ?? 160),
     addon: Number(cfg?.addon ?? 150),
     adminFeePerPlayer: Number(cfg?.admin_fee_per_player ?? 60),
+    // Não influenciam a premiação da etapa; só a divisão do Pote Acumulado.
+    rankingSharePct: Number(cfg?.ranking_share_pct ?? 50),
+    rankingFirstPct: Number(cfg?.ranking_first_pct ?? 50),
+    rankingSecondPct: Number(cfg?.ranking_second_pct ?? 30),
+    rankingThirdPct: Number(cfg?.ranking_third_pct ?? 20),
   };
 
   // --limpar: zera a premiação da temporada inteira. Serve para os anos em que

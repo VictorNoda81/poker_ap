@@ -4,8 +4,8 @@ import { AdminCard, Field, Flash, PrimaryButton, inputClass } from "@/components
 import { ErrorNotice, SetupNotice } from "@/components/ui/primitives";
 import { getCurrentSeason, getSeasonBundle, listSeasons } from "@/lib/db/queries";
 import { load } from "@/lib/db/load";
-import { formatBRL } from "@/lib/domain/money";
-import { suggestStagePrizes } from "@/lib/domain/prizes";
+import { formatBRL, formatNumber } from "@/lib/domain/money";
+import { splitFinalPot, suggestStagePrizes } from "@/lib/domain/prizes";
 import { CUTOFF_PLACEMENT } from "@/lib/domain/scoring";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +62,11 @@ export default async function AdminConfiguracoes({ searchParams }: { searchParam
   // proporcionalmente, mas o admin merece o aviso.
   const somaPct =
     settings.firstPct + settings.secondPct + settings.thirdPct + settings.fourthPct;
+
+  // Divisão do que a temporada já acumulou, para o exemplo sair com números reais.
+  const potePreview = splitFinalPot(bundle.accumulatedReserve, settings);
+  const somaRankingPct =
+    settings.rankingFirstPct + settings.rankingSecondPct + settings.rankingThirdPct;
 
   return (
     <>
@@ -284,6 +289,99 @@ export default async function AdminConfiguracoes({ searchParams }: { searchParam
                 defaultValue={settings.pointsBelowCutoff}
                 className={`${inputClass} tnum border-cap-red/40 text-center`}
               />
+            </div>
+          </div>
+        </AdminCard>
+
+        {/* -------------------------------------------------------------- */}
+        <AdminCard
+          title="Pote Acumulado"
+          description="Os 10% separados de cada etapa não vão todos para a mesa da Final: parte premia os líderes do ranking da temporada."
+        >
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div>
+              <div className="max-w-xs">
+                <Field
+                  label="Parte dos líderes do ranking (%)"
+                  htmlFor="rankingShare"
+                  hint={`O restante — ${formatNumber(100 - settings.rankingSharePct, 0)}% — é o pote disputado na mesa da Etapa Final.`}
+                >
+                  <input
+                    id="rankingShare"
+                    name="rankingShare"
+                    inputMode="decimal"
+                    defaultValue={settings.rankingSharePct}
+                    className={`${inputClass} tnum text-right`}
+                  />
+                </Field>
+              </div>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <Field label="1º do ranking (%)" htmlFor="ranking1">
+                  <input
+                    id="ranking1"
+                    name="ranking1"
+                    inputMode="decimal"
+                    defaultValue={settings.rankingFirstPct}
+                    className={`${inputClass} tnum text-right`}
+                  />
+                </Field>
+                <Field label="2º do ranking (%)" htmlFor="ranking2">
+                  <input
+                    id="ranking2"
+                    name="ranking2"
+                    inputMode="decimal"
+                    defaultValue={settings.rankingSecondPct}
+                    className={`${inputClass} tnum text-right`}
+                  />
+                </Field>
+                <Field
+                  label="3º do ranking (%)"
+                  htmlFor="ranking3"
+                  hint={`Somam ${formatNumber(somaRankingPct, 0)}% da parte dos líderes.`}
+                >
+                  <input
+                    id="ranking3"
+                    name="ranking3"
+                    inputMode="decimal"
+                    defaultValue={settings.rankingThirdPct}
+                    className={`${inputClass} tnum text-right`}
+                  />
+                </Field>
+              </div>
+
+              {somaRankingPct !== 100 ? (
+                <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+                  Os percentuais de 1º a 3º do ranking somam {formatNumber(somaRankingPct, 0)}%, não
+                  100%. O app reparte proporcionalmente para não estourar o pote, mas vale conferir.
+                </p>
+              ) : null}
+            </div>
+
+            {/* Prévia com o acumulado real da temporada. */}
+            <div className="rounded-lg border border-ink-800 bg-ink-950 px-4 py-3">
+              <p className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-chalk-dim">
+                {season.name}: {formatBRL(potePreview.accumulated)} acumulados até agora
+              </p>
+              <ul className="tnum mt-2 space-y-0.5 text-sm text-chalk-dim">
+                <li>
+                  Mesa da Etapa Final:{" "}
+                  <strong className="text-gold">{formatBRL(potePreview.stagePot)}</strong>
+                </li>
+                <li>
+                  Líderes do ranking:{" "}
+                  <strong className="text-chalk">{formatBRL(potePreview.rankingShare)}</strong>
+                </li>
+                {potePreview.byRankingPlace.map((premio) => (
+                  <li key={premio.place} className="pl-4">
+                    {premio.place}º do ranking:{" "}
+                    <strong className="text-chalk">{formatBRL(premio.amount)}</strong>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-chalk-dim">
+                O acumulado cresce a cada etapa lançada; estes valores acompanham.
+              </p>
             </div>
           </div>
         </AdminCard>

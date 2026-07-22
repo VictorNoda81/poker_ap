@@ -41,7 +41,7 @@ export default async function AdminFinal({ searchParams }: { searchParams: Searc
   }
 
   const { bundle, finalStage, invitees } = result.data;
-  const { season, stages, players, entries, settings, accumulatedReserve } = bundle;
+  const { season, stages, players, entries, settings, accumulatedReserve, finalPot } = bundle;
 
   const cutoffStage = stages.find((stage) => stage.isOctoberCutoff) ?? null;
 
@@ -78,16 +78,16 @@ export default async function AdminFinal({ searchParams }: { searchParams: Searc
           Etapa Final · {season.name}
         </h1>
         <p className="mt-1 text-sm text-chalk-dim">
-          Disputada pelos primeiros colocados do ranking, distribuindo a reserva acumulada da
-          temporada.
+          Disputada pelos primeiros colocados do ranking. Ela distribui o pote acumulado no ano —
+          menos a parte que premia os líderes da classificação.
         </p>
       </div>
 
       <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard
-          label="Pote acumulado"
-          value={formatBRL(accumulatedReserve)}
-          hint={`${settings.finalReservePct}% de cada etapa`}
+          label="Pote na mesa da Final"
+          value={formatBRL(finalPot.stagePot)}
+          hint={`${formatBRL(accumulatedReserve)} acumulados − ${formatBRL(finalPot.rankingShare)} dos líderes do ranking`}
           tone="gold"
         />
         <StatCard
@@ -109,6 +109,34 @@ export default async function AdminFinal({ searchParams }: { searchParams: Searc
           hint="Editável em Configurações"
         />
       </section>
+
+      {/* Quem recebe o quê do acumulado — é o admin que paga, precisa ver os
+          valores, não só o total. */}
+      <AdminCard
+        title="Prêmio dos líderes do ranking"
+        description={`${settings.rankingSharePct}% do Pote Acumulado, pago pela classificação final da temporada. Editável em Configurações.`}
+      >
+        <ul className="tnum space-y-1.5 text-sm">
+          {finalPot.byRankingPlace.map((premio) => {
+            const nomes = bundle.ranking
+              .filter((r) => r.stagesPlayed > 0 && r.displayPosition === premio.place)
+              .map((r) => r.player.fullName);
+            return (
+              <li key={premio.place} className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate text-chalk-dim">
+                  <strong className="font-bold text-chalk">{premio.place}º</strong>{" "}
+                  {nomes.length > 0 ? nomes.join(" · ") : "a definir"}
+                </span>
+                <span className="shrink-0 font-bold text-gold">{formatBRL(premio.amount)}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-3 text-xs text-chalk-dim">
+          Os nomes são a classificação de agora e mudam até a última etapa. Empate mostra os dois —
+          a divisão do prêmio nesse caso é decisão da liga.
+        </p>
+      </AdminCard>
 
       {!finalStage ? (
         <AdminCard title="A Etapa Final ainda não foi cadastrada">

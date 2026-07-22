@@ -56,7 +56,7 @@ export default async function AdminHome({
     );
   }
 
-  const { season, stages, ranking, accumulatedReserve, totals } = bundle;
+  const { season, stages, ranking, accumulatedReserve, finalPot, totals } = bundle;
   const aRevisar = stages.reduce((sum, s) => sum + s.needsReviewCount, 0);
   const semFinanceiro = stages.filter((s) => s.missingFinancials > 0);
   const proxima = stages.find((s) => s.status === "scheduled");
@@ -92,7 +92,12 @@ export default async function AdminHome({
           icon={<TrophyIcon className="h-5 w-5" />}
         />
         <StatCard label="Arrecadação" value={formatBRL(totals.gross)} />
-        <StatCard label="Pote da Final" value={formatBRL(accumulatedReserve)} tone="gold" />
+        <StatCard
+          label="Pote Acumulado"
+          value={formatBRL(accumulatedReserve)}
+          hint={`${formatBRL(finalPot.stagePot)} na mesa · ${formatBRL(finalPot.rankingShare)} aos líderes`}
+          tone="gold"
+        />
       </section>
 
       {/* ------------------------------------------------------------------ */}
