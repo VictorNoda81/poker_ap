@@ -20,7 +20,7 @@
  *     resposta de formulário cacheada é receita para bug difícil de achar.
  */
 
-const VERSAO = "v3";
+const VERSAO = "v4";
 const CACHE_ESTATICO = `cap-poker-estatico-${VERSAO}`;
 const CACHE_PAGINAS = `cap-poker-paginas-${VERSAO}`;
 const PAGINA_OFFLINE = "/offline";
