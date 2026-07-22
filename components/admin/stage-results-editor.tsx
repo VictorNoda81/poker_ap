@@ -474,6 +474,11 @@ export function StageResultsEditor({
           </div>
 
           <p className="border-t border-ink-800 px-4 py-3 text-xs text-chalk-dim">
+            Re-buys em branco = não registrado, e a etapa fica de fora das estatísticas de re-buy do
+            jogador. Quem jogou sem comprar ficha precisa de um <strong className="text-chalk">0</strong>{" "}
+            digitado — é o que diferencia “jogou limpo” de “ninguém anotou”, e o ranking usa isso
+            como critério de desempate.
+            <br />
             Deixe a colocação em branco para “16º ou pior”: a pontuação é a mesma em toda a faixa e o app deduz a posição pelos pontos da etapa. Se você souber a ordem real do fundo da mesa, preencha (17º, 22º…) — aí o valor digitado vale e entra na classificação média do jogador.
             O valor gasto é o campo que vale; re-buys e add-on servem só para calculá-lo.
           </p>

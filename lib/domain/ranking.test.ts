@@ -3,6 +3,7 @@ import {
   accumulatedFinalReserve,
   buildRanking,
   derivePlacements,
+  temExtrasCompletos,
   suggestFinalInvitees,
   type RankingEntry,
   type RankingPlayer,
@@ -378,5 +379,95 @@ describe("sugestão de convidados da Etapa Final", () => {
     const players = [player("a", "Ana"), player("z", "Zeca")];
     const convidados = suggestFinalInvitees(players, [entry("e1", "a", 1, 55)], ["e1"], 20);
     expect(convidados.map((r) => r.player.fullName)).toEqual(["Ana"]);
+  });
+});
+
+describe("re-buys e add-ons", () => {
+  function extra(
+    stageId: string,
+    playerId: string,
+    placement: number,
+    points: number,
+    rebuys: number | null,
+    hadAddon: boolean | null,
+  ): RankingEntry {
+    return { stageId, playerId, placement, points, amountPaid: null, prizeAmount: 0, rebuys, hadAddon };
+  }
+
+  it("soma re-buys e add-ons e calcula a média por etapa registrada", () => {
+    const entries = [
+      extra("e1", "a", 1, 55, 2, true),
+      extra("e2", "a", 4, 38, 0, false),
+      extra("e3", "a", 7, 23, 1, true),
+    ];
+    const [ana] = buildRanking([player("a", "Ana")], entries);
+    expect(ana.totalRebuys).toBe(3);
+    expect(ana.totalAddons).toBe(2);
+    expect(ana.extrasRecordedStages).toBe(3);
+    expect(ana.stagesMissingExtras).toBe(0);
+    expect(ana.averageRebuys).toBe(1); // 3 ÷ 3
+  });
+
+  it("zero re-buy conta como registro; os dois campos em branco, não", () => {
+    const [ana] = buildRanking(
+      [player("a", "Ana")],
+      [extra("e1", "a", 1, 55, 0, false), extra("e2", "a", 4, 38, null, null)],
+    );
+    expect(ana.extrasRecordedStages).toBe(1);
+    expect(ana.stagesMissingExtras).toBe(1);
+    expect(ana.totalRebuys).toBe(0);
+  });
+
+  it("etapa importada da planilha (sem os campos) não conta como registrada", () => {
+    const [ana] = buildRanking([player("a", "Ana")], [entry("e1", "a", 1, 55)]);
+    expect(ana.stagesMissingExtras).toBe(1);
+    expect(ana.averageRebuys).toBeNull();
+  });
+
+  it("desempata pelo total de re-buys + add-ons: menos vence", () => {
+    // Mesmos pontos, mesmas colocações — só o gasto em fichas difere. O
+    // econômico é "Zeca" DE PROPÓSITO: se o critério não funcionasse, a ordem
+    // alfabética colocaria Ana na frente e o teste passaria à toa.
+    const players = [player("gastador", "Ana"), player("economico", "Zeca")];
+    const entries = [
+      extra("e1", "gastador", 3, 43, 3, true),
+      extra("e2", "gastador", 5, 33, 2, true),
+      extra("e1", "economico", 3, 43, 0, false),
+      extra("e2", "economico", 5, 33, 1, false),
+    ];
+    const ranking = buildRanking(players, entries);
+    expect(ranking[0].totalPoints).toBe(ranking[1].totalPoints);
+    expect(ranking.map((r) => r.player.fullName)).toEqual(["Zeca", "Ana"]);
+  });
+
+  it("o desempate é IGNORADO quando um dos dois tem etapa sem lançamento", () => {
+    // Ana teve tudo lançado e fez 5 re-buys. Zeca só teve UMA etapa lançada,
+    // com 0 re-buys — se o critério valesse, ele passaria na frente por um
+    // dado que não existe. O certo é cair na ordem alfabética: Ana primeiro.
+    const players = [player("z", "Zeca"), player("a", "Ana")];
+    const entries = [
+      extra("e1", "a", 3, 43, 5, true),
+      extra("e2", "a", 5, 33, 0, false),
+      extra("e1", "z", 3, 43, 0, false),
+      extra("e2", "z", 5, 33, null, null),
+    ];
+    const ranking = buildRanking(players, entries);
+    expect(temExtrasCompletos(ranking.find((r) => r.player.id === "z")!)).toBe(false);
+    expect(temExtrasCompletos(ranking.find((r) => r.player.id === "a")!)).toBe(true);
+    expect(ranking.map((r) => r.player.fullName)).toEqual(["Ana", "Zeca"]);
+  });
+
+  it("o desempate por re-buys só entra DEPOIS das colocações", () => {
+    // Zeca tem uma vitória e mais re-buys; a vitória vale mais.
+    const players = [player("z", "Zeca"), player("a", "Ana")];
+    const entries = [
+      extra("e1", "z", 1, 55, 4, true),
+      extra("e2", "z", 12, 11, 4, true),
+      extra("e1", "a", 2, 48, 0, false),
+      extra("e2", "a", 9, 18, 0, false),
+    ];
+    const ranking = buildRanking(players, entries);
+    expect(ranking[0].totalPoints).toBe(ranking[1].totalPoints); // 66 cada
+    expect(ranking[0].player.fullName).toBe("Zeca");
   });
 });

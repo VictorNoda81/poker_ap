@@ -47,6 +47,18 @@ function gastoIncompleto(row: RankingRow): boolean {
   return row.stagesMissingFinancials > 0;
 }
 
+/**
+ * Mesma lógica de "Pago": enquanto houver etapa sem re-buy/add-on lançados, os
+ * totais mentiriam — um jogador com 6 etapas e só 1 lançada apareceria com
+ * "1 re-buy", parecendo mais econômico que quem teve tudo registrado.
+ *
+ * A liga só passou a registrar re-buy e add-on em 2026; as etapas importadas
+ * das planilhas não têm essa informação, então hoje quase tudo exibe "—".
+ */
+function extrasIncompletos(row: RankingRow): boolean {
+  return row.stagesPlayed === 0 || row.stagesMissingExtras > 0;
+}
+
 /** ROI = quanto recebeu ÷ quanto gastou. null quando o gasto não é conhecido. */
 function roiOf(row: RankingRow): number | null {
   if (gastoIncompleto(row) || row.totalPaid <= 0) return null;
@@ -64,6 +76,9 @@ type SortKey =
   | "segundo"
   | "terceiro"
   | "melhor"
+  | "rebuys"
+  | "addons"
+  | "mediaRebuys"
   | "pago"
   | "arrecadado"
   | "saldo"
@@ -104,6 +119,27 @@ const COLUMNS: Column[] = [
     lowerIsBetter: true,
     title: "Melhor colocação numa etapa (e quantas vezes a atingiu)",
   },
+  {
+    key: "rebuys",
+    label: "Re-buys",
+    align: "right",
+    lowerIsBetter: true,
+    title: "Re-buys somados na temporada. Só aparece com todas as etapas lançadas.",
+  },
+  {
+    key: "addons",
+    label: "Add-ons",
+    align: "right",
+    lowerIsBetter: true,
+    title: "Etapas em que pegou add-on",
+  },
+  {
+    key: "mediaRebuys",
+    label: "RB/etapa",
+    align: "right",
+    lowerIsBetter: true,
+    title: "Re-buys por etapa jogada",
+  },
   { key: "pago", label: "Pago", align: "right", financial: true },
   { key: "arrecadado", label: "Arrecadado", align: "right", financial: true },
   { key: "saldo", label: "Saldo", align: "right", financial: true },
@@ -139,6 +175,12 @@ function sortValue(row: RankingRow, key: SortKey): number | string | null {
       return row.thirds;
     case "melhor":
       return row.bestPlacement;
+    case "rebuys":
+      return extrasIncompletos(row) ? null : row.totalRebuys;
+    case "addons":
+      return extrasIncompletos(row) ? null : row.totalAddons;
+    case "mediaRebuys":
+      return extrasIncompletos(row) ? null : row.averageRebuys;
     case "pago":
       return row.totalPaid;
     case "arrecadado":
@@ -277,7 +319,7 @@ export function RankingTable({
       {/* Tabela                                                            */}
       {/* ---------------------------------------------------------------- */}
       <div className="card table-scroll">
-        <table className="w-full min-w-[62rem] table-fixed border-collapse text-sm">
+        <table className="w-full min-w-[76rem] table-fixed border-collapse text-sm">
           {/* Larguras fixas + uma coluna final sem largura: o espaço que sobra
               vai para ela, em vez de a coluna do nome esticar e afastar os
               números. As colunas de dinheiro são mais largas porque
@@ -398,6 +440,18 @@ export function RankingTable({
                         ) : null}
                       </>
                     )}
+                  </td>
+
+                  <td className="tnum px-1.5 py-2.5 text-right text-chalk-dim">
+                    {extrasIncompletos(row) ? "—" : row.totalRebuys}
+                  </td>
+                  <td className="tnum px-1.5 py-2.5 text-right text-chalk-dim">
+                    {extrasIncompletos(row) ? "—" : row.totalAddons}
+                  </td>
+                  <td className="tnum px-1.5 py-2.5 text-right text-chalk-dim">
+                    {extrasIncompletos(row) || row.averageRebuys === null
+                      ? "—"
+                      : formatNumber(row.averageRebuys, 1)}
                   </td>
 
                   {showFinancials ? (

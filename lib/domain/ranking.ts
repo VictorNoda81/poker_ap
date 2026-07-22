@@ -12,7 +12,13 @@
  *   3. mais 2º lugares
  *   4. mais 3º lugares
  *   5. melhor colocação individual na temporada
- *   6. nome em ordem alfabética (critério final, determinístico)
+ *   6. menos re-buys + add-ons (quem gastou menos para chegar aos mesmos pontos)
+ *   7. nome em ordem alfabética (critério final, determinístico)
+ *
+ * O critério 6 só entra quando os DOIS jogadores têm re-buys e add-ons
+ * registrados em todas as etapas que jogaram. Sem isso ele premiaria quem
+ * simplesmente não teve os dados lançados — a liga só começou a registrar re-buy
+ * e add-on em 2026, e as etapas importadas das planilhas não têm essa coluna.
  */
 
 import { fromCents, round2, toCents } from "./money";
@@ -74,6 +80,10 @@ export interface RankingEntry {
   /** null = valor gasto ainda não informado. */
   amountPaid: number | null;
   prizeAmount: number;
+  /** Quantos re-buys o jogador fez na etapa. null = não registrado. */
+  rebuys?: number | null;
+  /** Se pegou add-on. null = não registrado. */
+  hadAddon?: boolean | null;
 }
 
 export interface RankingRow {
@@ -108,6 +118,16 @@ export interface RankingRow {
   thirds: number;
   /** Quantas etapas do jogador ainda estão sem o valor gasto preenchido. */
   stagesMissingFinancials: number;
+  /** Re-buys somados nas etapas em que foram registrados. */
+  totalRebuys: number;
+  /** Etapas em que o jogador pegou add-on. */
+  totalAddons: number;
+  /** Etapas com re-buy/add-on registrados — denominador das médias. */
+  extrasRecordedStages: number;
+  /** Participações ainda sem registro de re-buy/add-on. */
+  stagesMissingExtras: number;
+  /** Re-buys por etapa registrada. null quando não há nenhuma. */
+  averageRebuys: number | null;
 }
 
 /**
@@ -140,6 +160,9 @@ export function buildRanking(
     let seconds = 0;
     let thirds = 0;
     let stagesMissingFinancials = 0;
+    let totalRebuys = 0;
+    let totalAddons = 0;
+    let extrasRecordedStages = 0;
 
     for (const entry of playerEntries) {
       totalPoints += entry.points;
@@ -159,6 +182,14 @@ export function buildRanking(
       if (entry.placement === 1) wins += 1;
       else if (entry.placement === 2) seconds += 1;
       else if (entry.placement === 3) thirds += 1;
+
+      // "Registrado" = alguém preencheu a etapa no admin. Zero re-buy conta
+      // como registro (rebuys = 0); em branco nos dois campos, não.
+      if (entry.rebuys != null || entry.hadAddon != null) {
+        extrasRecordedStages += 1;
+        totalRebuys += entry.rebuys ?? 0;
+        if (entry.hadAddon === true) totalAddons += 1;
+      }
     }
 
     const stagesPlayed = playerEntries.length;
@@ -187,6 +218,11 @@ export function buildRanking(
       seconds,
       thirds,
       stagesMissingFinancials,
+      totalRebuys,
+      totalAddons,
+      extrasRecordedStages,
+      stagesMissingExtras: stagesPlayed - extrasRecordedStages,
+      averageRebuys: extrasRecordedStages > 0 ? totalRebuys / extrasRecordedStages : null,
     } satisfies RankingRow;
   });
 
@@ -207,6 +243,11 @@ export function buildRanking(
   return rows;
 }
 
+/** Jogou ao menos uma etapa e todas têm re-buy/add-on lançados. */
+export function temExtrasCompletos(row: RankingRow): boolean {
+  return row.stagesPlayed > 0 && row.stagesMissingExtras === 0;
+}
+
 /** Comparador do desempate. Exportado para poder ser testado isoladamente. */
 export function compareRankingRows(a: RankingRow, b: RankingRow): number {
   if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
@@ -219,6 +260,15 @@ export function compareRankingRows(a: RankingRow, b: RankingRow): number {
   const aBest = a.bestPlacement ?? Number.POSITIVE_INFINITY;
   const bBest = b.bestPlacement ?? Number.POSITIVE_INFINITY;
   if (aBest !== bBest) return aBest - bBest;
+
+  // Menos re-buys + add-ons vence: mesma pontuação com menos fichas compradas.
+  // Só vale quando os dois têm o histórico COMPLETO — comparar contra quem tem
+  // etapas em branco premiaria a falta de lançamento, não a economia.
+  if (temExtrasCompletos(a) && temExtrasCompletos(b)) {
+    const aExtras = a.totalRebuys + a.totalAddons;
+    const bExtras = b.totalRebuys + b.totalAddons;
+    if (aExtras !== bExtras) return aExtras - bExtras;
+  }
 
   return a.player.fullName.localeCompare(b.player.fullName, "pt-BR");
 }

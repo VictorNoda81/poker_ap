@@ -218,6 +218,8 @@ export async function getSeasonBundle(season: SeasonRow): Promise<SeasonBundle> 
       points: row.points,
       amountPaid: toNumber(row.amount_paid),
       prizeAmount: toNumberOr(row.prize_amount, 0),
+      rebuys: row.rebuys,
+      hadAddon: row.had_addon,
     })),
   );
 
@@ -441,6 +443,9 @@ export interface PlayerStageResult {
   points: number;
   amountPaid: number | null;
   prizeAmount: number;
+  /** null = a etapa não teve re-buy/add-on lançados. */
+  rebuys: number | null;
+  hadAddon: boolean | null;
 }
 
 export interface PlayerDetail {
@@ -458,6 +463,10 @@ export interface PlayerDetail {
     totalPaid: number;
     totalReceived: number;
     balance: number;
+    totalRebuys: number;
+    totalAddons: number;
+    extrasRecordedStages: number;
+    stagesMissingExtras: number;
     wins: number;
     bestPlacement: number | null;
   };
@@ -487,6 +496,10 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
     balance: 0,
     wins: 0,
     bestPlacement: null as number | null,
+    totalRebuys: 0,
+    totalAddons: 0,
+    extrasRecordedStages: 0,
+    stagesMissingExtras: 0,
   };
 
   for (const season of seasons) {
@@ -509,6 +522,8 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
           points: entry.points,
           amountPaid: entry.amountPaid,
           prizeAmount: entry.prizeAmount,
+          rebuys: entry.rebuys ?? null,
+          hadAddon: entry.hadAddon ?? null,
         };
       })
       .sort((a, b) => a.stageNumber - b.stageNumber);
@@ -520,6 +535,10 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
     career.totalPaid += row.totalPaid;
     career.totalReceived += row.totalReceived;
     career.wins += row.wins;
+    career.totalRebuys += row.totalRebuys;
+    career.totalAddons += row.totalAddons;
+    career.extrasRecordedStages += row.extrasRecordedStages;
+    career.stagesMissingExtras += row.stagesMissingExtras;
     if (row.bestPlacement !== null) {
       career.bestPlacement =
         career.bestPlacement === null
@@ -581,6 +600,11 @@ export interface PlayerSeasonStat {
   bestPlacementCount: number;
   /** Etapas do jogador ainda sem o valor gasto lançado. */
   stagesMissingFinancials: number;
+  /** Re-buys, add-ons e quantas etapas os têm lançados. */
+  totalRebuys: number;
+  totalAddons: number;
+  extrasRecordedStages: number;
+  stagesMissingExtras: number;
   /** true se terminou em 1º numa temporada JÁ ENCERRADA (campeão de verdade). */
   isChampion: boolean;
 }
@@ -642,6 +666,10 @@ export async function getPlayersAcrossSeasons(): Promise<{
         bestPlacement: row.bestPlacement,
         bestPlacementCount: row.bestPlacementCount,
         stagesMissingFinancials: row.stagesMissingFinancials,
+        totalRebuys: row.totalRebuys,
+        totalAddons: row.totalAddons,
+        extrasRecordedStages: row.extrasRecordedStages,
+        stagesMissingExtras: row.stagesMissingExtras,
         isChampion: encerrada && row.displayPosition === 1,
       };
     }

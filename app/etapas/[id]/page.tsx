@@ -135,10 +135,11 @@ export default async function EtapaPage({ params }: Params) {
       {stage.missingFinancials > 0 ? (
         <div className="card mb-6 border-ink-700 bg-ink-900 p-4">
           <p className="text-sm text-chalk-dim">
-            O financeiro por jogador (quanto cada um gastou e recebeu) passa a ser registrado a
-            partir das próximas etapas. Das anteriores, a liga guardava apenas o total do pote —
-            por isso as colunas <strong className="text-chalk">Pago</strong> e{" "}
-            <strong className="text-chalk">Prêmio</strong> aparecem vazias aqui.
+            O detalhe por jogador — quanto gastou, quanto recebeu, re-buys e add-on — passa a ser
+            registrado a partir das próximas etapas. Das anteriores, a liga guardava apenas o total
+            do pote, por isso as colunas <strong className="text-chalk">Re-buys</strong>,{" "}
+            <strong className="text-chalk">Add-on</strong>, <strong className="text-chalk">Pago</strong>{" "}
+            e <strong className="text-chalk">Prêmio</strong> aparecem vazias aqui.
           </p>
         </div>
       ) : null}
@@ -160,6 +161,8 @@ export default async function EtapaPage({ params }: Params) {
             invitedByName: e.player.invitedByName,
             displayPlacement: e.displayPlacement,
             points: e.points,
+            rebuys: e.rebuys,
+            hadAddon: e.hadAddon,
             amountPaid: e.amountPaid,
             prizeAmount: e.prizeAmount,
             needsReview: e.needsReview,

@@ -16,18 +16,30 @@ export interface StageResultRow {
   invitedByName: string | null;
   displayPlacement: number;
   points: number;
+  rebuys: number | null;
+  hadAddon: boolean | null;
   amountPaid: number | null;
   prizeAmount: number;
   needsReview: boolean;
   reviewNote: string | null;
 }
 
-type SortKey = "colocacao" | "jogador" | "pontos" | "pago" | "premio" | "saldo";
+type SortKey =
+  | "colocacao"
+  | "jogador"
+  | "pontos"
+  | "rebuys"
+  | "addon"
+  | "pago"
+  | "premio"
+  | "saldo";
 
 const COLUMNS: { key: SortKey; label: string; align: "left" | "right"; lowerIsBetter?: boolean }[] = [
   { key: "colocacao", label: "Col.", align: "left", lowerIsBetter: true },
   { key: "jogador", label: "Jogador", align: "left", lowerIsBetter: true },
   { key: "pontos", label: "Pontos", align: "right" },
+  { key: "rebuys", label: "Re-buys", align: "right", lowerIsBetter: true },
+  { key: "addon", label: "Add-on", align: "right", lowerIsBetter: true },
   { key: "pago", label: "Pago", align: "right" },
   { key: "premio", label: "Prêmio", align: "right" },
   { key: "saldo", label: "Saldo", align: "right" },
@@ -52,6 +64,11 @@ function sortValue(row: StageResultRow, key: SortKey): number | string | null {
       return row.fullName;
     case "pontos":
       return row.points;
+    case "rebuys":
+      return row.rebuys;
+    // null (não lançado) cai para o fim da ordenação, como nas outras colunas.
+    case "addon":
+      return row.hadAddon === null ? null : row.hadAddon ? 1 : 0;
     case "pago":
       return row.amountPaid;
     case "premio":
@@ -93,7 +110,7 @@ export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
     <>
       <p className="mb-2 text-xs text-chalk-dim">Toque num título para ordenar.</p>
       <div className="card table-scroll">
-        <table className="w-full min-w-[36rem] table-fixed border-collapse text-sm">
+        <table className="w-full min-w-[43rem] table-fixed border-collapse text-sm">
           {/* Colunas estreitas de propósito: no celular, uma coluna de nome larga
               empurrava os Pontos para longe do jogador. Nomes compridos truncam
               com "…" e aparecem inteiros no title. A última coluna não tem
@@ -101,6 +118,8 @@ export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
           <colgroup>
             <col className="w-[3.5rem]" />
             <col className="w-[9rem]" />
+            <col className="w-[4.5rem]" />
+            <col className="w-[4.5rem]" />
             <col className="w-[4.5rem]" />
             <col className="w-[6.5rem]" />
             <col className="w-[6.5rem]" />
@@ -187,6 +206,12 @@ export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
 
                   <td className="tnum px-1.5 py-2.5 text-right text-base font-bold text-chalk">
                     {formatNumber(row.points)}
+                  </td>
+                  <td className="tnum px-1.5 py-2.5 text-right text-chalk-dim">
+                    {row.rebuys === null ? "—" : row.rebuys}
+                  </td>
+                  <td className="tnum px-1.5 py-2.5 text-right text-chalk-dim">
+                    {row.hadAddon === null ? "—" : row.hadAddon ? "sim" : "não"}
                   </td>
                   <td className="tnum whitespace-nowrap px-1.5 py-2.5 text-right text-chalk-dim">
                     {row.amountPaid === null ? "—" : formatBRL(row.amountPaid)}

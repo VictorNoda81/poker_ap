@@ -43,6 +43,10 @@ export default async function JogadorPage({ params }: Params) {
 
   const { player, bySeason, career } = result.data;
   const semFinanceiro = career.totalPaid === 0 && career.totalReceived === 0;
+  // Re-buy/add-on só entrou no lançamento em 2026: com etapa em branco, somar o
+  // que existe daria um número menor que o real e pareceria economia.
+  const semExtras = career.stagesMissingExtras > 0 || career.extrasRecordedStages === 0;
+  const mediaRebuys = semExtras ? null : career.totalRebuys / career.extrasRecordedStages;
 
   return (
     <>
@@ -63,7 +67,7 @@ export default async function JogadorPage({ params }: Params) {
       />
 
       {/* Números de carreira, somando todas as temporadas. */}
-      <section className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard
           label="Pontos na carreira"
           value={formatNumber(career.totalPoints)}
@@ -79,6 +83,15 @@ export default async function JogadorPage({ params }: Params) {
           }
           tone={career.wins > 0 ? "gold" : "default"}
           icon={career.wins > 0 ? <TrophyIcon className="h-5 w-5" /> : undefined}
+        />
+        <StatCard
+          label="Re-buys na carreira"
+          value={semExtras ? "—" : formatNumber(career.totalRebuys)}
+          hint={
+            semExtras
+              ? "Registrado a partir de 2026"
+              : `${career.totalAddons} add-ons · ${formatNumber(mediaRebuys ?? 0, 1)} por etapa`
+          }
         />
         <StatCard
           label="Total pago"
@@ -127,6 +140,22 @@ export default async function JogadorPage({ params }: Params) {
                   }
                 />
                 <Summary
+                  label="Re-buys"
+                  value={
+                    row.stagesMissingExtras > 0
+                      ? "—"
+                      : `${row.totalRebuys} · ${row.totalAddons} add-on${row.totalAddons === 1 ? "" : "s"}`
+                  }
+                />
+                <Summary
+                  label="RB/etapa"
+                  value={
+                    row.stagesMissingExtras > 0 || row.averageRebuys === null
+                      ? "—"
+                      : formatNumber(row.averageRebuys, 1)
+                  }
+                />
+                <Summary
                   label="Saldo"
                   value={
                     row.totalPaid === 0 && row.totalReceived === 0
@@ -138,13 +167,15 @@ export default async function JogadorPage({ params }: Params) {
 
               {/* Etapa a etapa. */}
               <div className="card table-scroll">
-                <table className="w-full min-w-[40rem] border-collapse text-sm">
+                <table className="w-full min-w-[48rem] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-ink-800 text-left text-[0.65rem] uppercase tracking-[0.12em] text-chalk-dim">
                       <th scope="col" className="px-3 py-3 font-bold">Etapa</th>
                       <th scope="col" className="px-3 py-3 font-bold">Data</th>
                       <th scope="col" className="px-3 py-3 text-right font-bold">Colocação</th>
                       <th scope="col" className="px-3 py-3 text-right font-bold">Pontos</th>
+                      <th scope="col" className="px-3 py-3 text-right font-bold">Re-buys</th>
+                      <th scope="col" className="px-3 py-3 text-right font-bold">Add-on</th>
                       <th scope="col" className="px-3 py-3 text-right font-bold">Pago</th>
                       <th scope="col" className="px-3 py-3 text-right font-bold">Prêmio</th>
                     </tr>
@@ -179,6 +210,12 @@ export default async function JogadorPage({ params }: Params) {
                         </td>
                         <td className="tnum px-3 py-3 text-right font-bold text-chalk">
                           {formatNumber(r.points)}
+                        </td>
+                        <td className="tnum px-3 py-3 text-right text-chalk-dim">
+                          {r.rebuys === null ? "—" : r.rebuys}
+                        </td>
+                        <td className="tnum px-3 py-3 text-right text-chalk-dim">
+                          {r.hadAddon === null ? "—" : r.hadAddon ? "sim" : "não"}
                         </td>
                         <td className="tnum px-3 py-3 text-right text-chalk-dim">
                           {r.amountPaid === null ? "—" : formatBRL(r.amountPaid)}
