@@ -223,9 +223,17 @@ export async function getSeasonBundle(season: SeasonRow): Promise<SeasonBundle> 
     const adminFeePerPlayer = toNumber(row.admin_fee_per_player) ?? settings.adminFeePerPlayer;
     const otherCosts = toNumberOr(row.other_costs, 0);
     const temQuinto = stageEntries.some((e) => e.placement === 5);
+    // Reserva registrada na origem (histórico) manda sobre a fórmula.
+    const reserveOverride = toNumber(row.reserve_override);
 
     const breakdown = suggestStagePrizes(
-      { gross, participants: stageEntries.length, adminFeePerPlayer, otherCosts },
+      {
+        gross,
+        participants: stageEntries.length,
+        adminFeePerPlayer,
+        otherCosts,
+        reserveOverride,
+      },
       settings,
       temQuinto ? [1, 2, 3, 4, 5] : [1, 2, 3, 4],
     );

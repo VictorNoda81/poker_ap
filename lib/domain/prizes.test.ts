@@ -105,6 +105,41 @@ describe("etapas fora do padrão", () => {
   });
 });
 
+describe("reserva registrada na origem (histórico das planilhas)", () => {
+  // Etapa 1 de Jan/26: o pote de R$ 6.500 já vinha líquido de taxa e custos, e
+  // a liga registrou R$ 650 de reserva. Esse número não pode mudar.
+  const historica = {
+    gross: 6500,
+    participants: 29,
+    adminFeePerPlayer: 0,
+    otherCosts: 0,
+    reserveOverride: 650,
+  };
+
+  it("mantém exatamente a reserva registrada, sem recalcular", () => {
+    expect(suggestStagePrizes(historica).reserve).toBe(650);
+    expect(computeReserve(historica)).toBe(650);
+  });
+
+  it("distribui o que sobra do pote depois da reserva", () => {
+    const r = suggestStagePrizes(historica);
+    // 6500 − 650 de reserva = 5850 para os jogadores (incluindo o 5º).
+    expect(r.totalPrizes).toBe(5850);
+    expect(r.fifthPrize).toBe(310);
+    expect(r.distributable).toBe(5540); // 5850 − 310, dividido entre 1º e 4º
+  });
+
+  it("pote = reserva + prêmios, sem sobra", () => {
+    const r = suggestStagePrizes(historica);
+    expect(r.reserve + r.totalPrizes).toBeCloseTo(6500, 2);
+  });
+
+  it("uma reserva de zero é respeitada (não cai no cálculo automático)", () => {
+    const r = suggestStagePrizes({ ...historica, reserveOverride: 0 });
+    expect(r.reserve).toBe(0);
+  });
+});
+
 describe("computeReserve", () => {
   it("devolve só a reserva da cascata", () => {
     expect(computeReserve(ETAPA)).toBe(739);

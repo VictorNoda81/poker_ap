@@ -41,6 +41,8 @@ export interface StageRow {
   /** Taxa por jogador desta etapa. null = usa a padrão da temporada. */
   admin_fee_per_player: string | number | null;
   other_costs: string | number;
+  /** Reserva registrada na origem (histórico). null = calcular pela fórmula. */
+  reserve_override: string | number | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

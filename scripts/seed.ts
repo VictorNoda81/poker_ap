@@ -171,6 +171,12 @@ async function seedStages(db: SupabaseClient, seasonId: string, parsed: ParsedRa
     event_date: stage.date,
     status: stage.grossAmount === null ? ("scheduled" as const) : ("completed" as const),
     gross_amount_override: stage.grossAmount,
+    // O pote das planilhas já vinha líquido de taxa de administração e outros
+    // custos, e o valor da reserva é um fato registrado pela liga — não deve
+    // ser recalculado pela cascata atual.
+    reserve_override: stage.reserveAmount,
+    admin_fee_per_player: 0,
+    other_costs: 0,
   }));
 
   const { data, error } = await db
@@ -190,19 +196,38 @@ async function seedEntries(
   keyToId: Map<string, string>,
   stageIds: Map<number, string>,
 ): Promise<number> {
+  // Financeiro já lançado (pelo admin ou pelo preenchimento de prêmios) tem de
+  // sobreviver a um novo seed: reimportar a planilha não pode apagar dinheiro.
+  const jaLancado = new Map<string, { amount_paid: unknown; prize_amount: unknown }>();
+  const ids = [...stageIds.values()];
+  if (ids.length > 0) {
+    const { data } = await db
+      .from("stage_entries")
+      .select("stage_id, player_id, amount_paid, prize_amount")
+      .in("stage_id", ids);
+    for (const row of data ?? []) {
+      jaLancado.set(`${row.stage_id}#${row.player_id}`, {
+        amount_paid: row.amount_paid,
+        prize_amount: row.prize_amount,
+      });
+    }
+  }
+
   const rows = parsed.results.map((result) => {
     const stageId = stageIds.get(result.stageNumber);
     const playerId = keyToId.get(playerKey(result.playerName));
     if (!stageId) throw new Error(`Etapa ${result.stageNumber} não encontrada.`);
     if (!playerId) throw new Error(`Jogador "${result.playerName}" não encontrado.`);
 
+    const anterior = jaLancado.get(`${stageId}#${playerId}`);
+
     return {
       stage_id: stageId,
       player_id: playerId,
       placement: result.placement,
       points: result.points,
-      amount_paid: null,
-      prize_amount: 0,
+      amount_paid: anterior?.amount_paid ?? null,
+      prize_amount: anterior?.prize_amount ?? 0,
       needs_review: result.needsReview,
       review_note: result.reviewNote,
     };

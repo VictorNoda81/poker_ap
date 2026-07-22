@@ -75,7 +75,9 @@ async function main() {
 
   const { data: stages } = await db
     .from("stages")
-    .select("id, number, event_date, is_final, status, gross_amount_override, admin_fee_per_player, other_costs")
+    .select(
+      "id, number, event_date, is_final, status, gross_amount_override, admin_fee_per_player, other_costs, reserve_override",
+    )
     .eq("season_id", season.id)
     .eq("status", "completed")
     .order("number");
@@ -122,8 +124,12 @@ async function main() {
       {
         gross,
         participants: participantes,
-        adminFeePerPlayer: stage.admin_fee_per_player === null ? null : Number(stage.admin_fee_per_player),
+        adminFeePerPlayer:
+          stage.admin_fee_per_player === null ? null : Number(stage.admin_fee_per_player),
         otherCosts: Number(stage.other_costs ?? 0),
+        // Reserva registrada na planilha: é fato, não se recalcula.
+        reserveOverride:
+          stage.reserve_override === null ? null : Number(stage.reserve_override),
       },
       settings,
       presentes,

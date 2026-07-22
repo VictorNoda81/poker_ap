@@ -1,7 +1,7 @@
 -- ===========================================================================
 -- Liga de Poker do CAP — todas as migrations, na ordem
 --
--- Gerado por: npm run sql  (0001_schema.sql + 0002_rls.sql + 0003_login_attempts.sql + 0004_modelo_financeiro.sql)
+-- Gerado por: npm run sql  (0001_schema.sql + 0002_rls.sql + 0003_login_attempts.sql + 0004_modelo_financeiro.sql + 0005_reserva_do_historico.sql)
 -- Cole TUDO no SQL Editor do Supabase e clique em Run.
 --
 -- Pode rodar quantas vezes quiser: as migrations usam guardas de existência,
@@ -406,3 +406,27 @@ set
   prize_third_pct = 18,
   prize_fourth_pct = 13
 where prize_first_pct = 50;
+
+
+-- =============================================================================
+-- Reserva conhecida do histórico
+-- =============================================================================
+-- Nas planilhas antigas, a linha "10% DO POTE POR RODADA" é um FATO registrado
+-- pela liga, não algo a recalcular: aquele valor já saiu com a taxa de
+-- administração e os outros custos deduzidos.
+--
+-- Recalcular a reserva dessas etapas pela cascata atual mudava números que a
+-- liga considera fechados. Por isso o valor passa a ser guardado, e a fórmula
+-- só vale para as etapas em que ele não existe (as novas).
+-- =============================================================================
+-- Idempotente: pode rodar mais de uma vez.
+-- =============================================================================
+
+alter table stages
+  add column if not exists reserve_override numeric(12, 2)
+  check (reserve_override >= 0);
+
+comment on column stages.reserve_override is
+  'Reserva da Etapa Final registrada na origem. Quando preenchida, vale sobre a '
+  'fórmula — é o caso das etapas importadas das planilhas, cujo pote já vinha '
+  'líquido de taxa de administração e outros custos.';

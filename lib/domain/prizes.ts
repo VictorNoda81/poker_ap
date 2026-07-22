@@ -52,6 +52,12 @@ export interface StageCosts {
   adminFeePerPlayer?: number | null;
   /** Outros custos da etapa (troféu, garçons...). */
   otherCosts?: number;
+  /**
+   * Reserva já conhecida da etapa. Quando informada, vale sobre o cálculo —
+   * é o caso do histórico, em que a liga registrou o valor do pote e ele não
+   * deve mudar. O distribuível passa a ser o que sobra depois dela.
+   */
+  reserveOverride?: number | null;
 }
 
 export interface PrizeBreakdown {
@@ -110,8 +116,12 @@ export function suggestStagePrizes(
   const shortfall = baseBruta < 0;
   const baseCents = shortfall ? 0 : baseBruta;
 
-  const reserveCents = Math.round((baseCents * settings.finalReservePct) / 100);
-  const distCents = baseCents - reserveCents;
+  // Reserva conhecida da origem manda sobre a fórmula (histórico importado).
+  const reserveCents =
+    costs.reserveOverride === null || costs.reserveOverride === undefined
+      ? Math.round((baseCents * settings.finalReservePct) / 100)
+      : toCents(costs.reserveOverride);
+  const distCents = Math.max(0, baseCents - reserveCents);
 
   // 1º a 4º: reparte o distribuível pelos percentuais presentes, normalizados.
   const premiados = [1, 2, 3, 4].filter((p) => available.has(p) && pctOf(settings, p) > 0);
