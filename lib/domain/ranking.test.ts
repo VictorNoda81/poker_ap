@@ -298,20 +298,21 @@ function placementOf(points: number): number | null {
 }
 
 describe("reserva acumulada da temporada", () => {
-  it("soma os 10% de todas as etapas regulares de 2026", () => {
-    const stages = [6500, 10000, 9000, 8100, 11500, 7000].map((gross) => ({
-      gross,
+  it("soma a reserva já calculada de cada etapa regular", () => {
+    const stages = [650, 1000, 900, 810, 1150, 700].map((reserve) => ({
+      reserve,
       isFinal: false,
     }));
-    expect(accumulatedFinalReserve(stages, 10)).toBe(5210);
+    expect(accumulatedFinalReserve(stages)).toBe(5210);
   });
 
   it("a própria Etapa Final não gera reserva nova", () => {
-    const stages = [
-      { gross: 6500, isFinal: false },
-      { gross: 20000, isFinal: true },
-    ];
-    expect(accumulatedFinalReserve(stages, 10)).toBe(650);
+    expect(
+      accumulatedFinalReserve([
+        { reserve: 650, isFinal: false },
+        { reserve: 2000, isFinal: true },
+      ]),
+    ).toBe(650);
   });
 });
 

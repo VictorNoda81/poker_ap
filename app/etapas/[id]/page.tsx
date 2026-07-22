@@ -42,6 +42,7 @@ export default async function EtapaPage({ params }: Params) {
   // que o admin vê ao lançar a etapa.
   const check = validatePrizeDistribution(
     stage.gross,
+    stage.deductions,
     stage.reserve,
     entries.map((e) => e.prizeAmount),
   );
@@ -75,7 +76,7 @@ export default async function EtapaPage({ params }: Params) {
         }
       />
 
-      <section className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard
           label="Participantes"
           value={entries.length === 0 ? "—" : formatNumber(entries.length)}
@@ -90,9 +91,20 @@ export default async function EtapaPage({ params }: Params) {
           }
         />
         <StatCard
+          label="Custos deduzidos"
+          value={stage.deductions === 0 ? "—" : formatBRL(stage.deductions)}
+          hint={
+            stage.deductions === 0
+              ? undefined
+              : `Adm. ${formatBRL(stage.adminFeeTotal)}${
+                  stage.otherCosts > 0 ? ` · outros ${formatBRL(stage.otherCosts)}` : ""
+                }`
+          }
+        />
+        <StatCard
           label={stage.isFinal ? "Sem nova reserva" : "Reserva Etapa Final"}
           value={stage.isFinal ? "—" : formatBRL(stage.reserve)}
-          hint={stage.isFinal ? "A Final distribui o acumulado" : undefined}
+          hint={stage.isFinal ? "A Final distribui o acumulado" : "10% após as deduções"}
           tone="gold"
         />
         <StatCard

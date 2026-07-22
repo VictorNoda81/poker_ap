@@ -38,6 +38,9 @@ export interface StageRow {
   is_october_cutoff: boolean;
   status: StageStatus;
   gross_amount_override: string | number | null;
+  /** Taxa por jogador desta etapa. null = usa a padrão da temporada. */
+  admin_fee_per_player: string | number | null;
+  other_costs: string | number;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -67,7 +70,9 @@ export interface SeasonSettingsRow {
   final_reserve_pct: string | number;
   prize_first_pct: string | number;
   prize_second_pct: string | number;
-  prize_fourth_fixed: string | number;
+  prize_third_pct: string | number;
+  prize_fourth_pct: string | number;
+  admin_fee_per_player: string | number;
   points_below_cutoff: number;
   final_invite_count: number;
   updated_at: string;

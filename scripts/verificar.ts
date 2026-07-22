@@ -40,10 +40,14 @@ for (const year of SEASONS) {
   const ranking = buildRanking(players, entries);
 
   const reservaPlanilha = parsed.stages.reduce((s, e) => s + (e.reserveAmount ?? 0), 0);
-  const reservaCalc = parsed.stages.reduce(
-    (s, e) => s + (e.grossAmount !== null ? computeReserve(e.grossAmount, 10) : 0),
-    0,
-  );
+  // Reserva pela cascata nova (taxa por jogador + prêmio do 5º saem antes dos
+  // 10%), portanto NÃO bate mais com a linha "10% do pote" das planilhas: a
+  // regra mudou por decisão da liga.
+  const reservaCalc = parsed.stages.reduce((soma, etapa) => {
+    if (etapa.grossAmount === null) return soma;
+    const jogadores = parsed.results.filter((r) => r.stageNumber === etapa.number).length;
+    return soma + computeReserve({ gross: etapa.grossAmount, participants: jogadores });
+  }, 0);
   const totalPlanilha = [...parsed.spreadsheetTotals.values()].reduce((a, b) => a + b, 0);
   const totalRanking = ranking.reduce((s, r) => s + r.totalPoints, 0);
 
@@ -62,8 +66,8 @@ for (const year of SEASONS) {
   );
   console.log(`  líder: ${lider?.player.fullName} (${lider?.totalPoints} pts)`);
   console.log(
-    `  reserva: ${formatBRL(reservaPlanilha)} (planilha) vs ${formatBRL(reservaCalc)} (calculada)` +
-      (reservaPlanilha === reservaCalc ? "  ✓" : "  ✖ DIVERGE"),
+    `  reserva: ${formatBRL(reservaPlanilha)} (regra antiga, planilha) → ` +
+      `${formatBRL(reservaCalc)} (regra nova)`,
   );
   console.log(
     `  soma de pontos: ${totalRanking} (ranking) vs ${totalPlanilha} (planilha)` +

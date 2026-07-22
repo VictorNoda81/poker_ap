@@ -162,10 +162,12 @@ export default async function AdminEtapa({ params, searchParams }: Params) {
           buyin: bundle.settings.buyin,
           rebuy: bundle.settings.rebuy,
           addon: bundle.settings.addon,
+          adminFeePerPlayer: bundle.settings.adminFeePerPlayer,
           finalReservePct: bundle.settings.finalReservePct,
           firstPct: bundle.settings.firstPct,
           secondPct: bundle.settings.secondPct,
-          fourthFixed: bundle.settings.fourthFixed,
+          thirdPct: bundle.settings.thirdPct,
+          fourthPct: bundle.settings.fourthPct,
           pointsBelowCutoff: bundle.settings.pointsBelowCutoff,
         }}
         pointsTable={bundle.pointsTable}
@@ -173,6 +175,8 @@ export default async function AdminEtapa({ params, searchParams }: Params) {
         isFinal={stage.isFinal}
         accumulatedReserve={accumulatedReserve}
         initialGrossOverride={stage.grossIsManual ? stage.gross : null}
+        initialAdminFeePerPlayer={stage.adminFeePerPlayer}
+        initialOtherCosts={stage.otherCosts}
       />
     </>
   );

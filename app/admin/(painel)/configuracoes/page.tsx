@@ -54,7 +54,14 @@ export default async function AdminConfiguracoes({ searchParams }: { searchParam
     .sort((a, b) => a - b);
 
   // Prévia com um exemplo concreto, para o admin ver o efeito das regras.
-  const exemplo = suggestStagePrizes(10000, settings);
+  const exemplo = suggestStagePrizes(
+    { gross: 10000, participants: 30, otherCosts: 0 },
+    settings,
+  );
+  // Os quatro percentuais precisam somar 100; se não somarem, o app reparte
+  // proporcionalmente, mas o admin merece o aviso.
+  const somaPct =
+    settings.firstPct + settings.secondPct + settings.thirdPct + settings.fourthPct;
 
   return (
     <>
@@ -124,6 +131,19 @@ export default async function AdminConfiguracoes({ searchParams }: { searchParam
                   className={`${inputClass} tnum text-right`}
                 />
               </Field>
+              <Field
+                label="Taxa de adm. por jogador (R$)"
+                htmlFor="taxaAdmin"
+                hint="Deduzida da arrecadação de cada etapa antes da reserva. Ajustável etapa a etapa."
+              >
+                <input
+                  id="taxaAdmin"
+                  name="taxaAdmin"
+                  defaultValue={settings.adminFeePerPlayer}
+                  inputMode="decimal"
+                  className={`${inputClass} tnum text-right`}
+                />
+              </Field>
             </div>
           </AdminCard>
 
@@ -164,29 +184,53 @@ export default async function AdminConfiguracoes({ searchParams }: { searchParam
                   className={`${inputClass} tnum text-right`}
                 />
               </Field>
+              <Field label="3º lugar (%)" htmlFor="premio3">
+                <input
+                  id="premio3"
+                  name="premio3"
+                  defaultValue={settings.thirdPct}
+                  inputMode="decimal"
+                  className={`${inputClass} tnum text-right`}
+                />
+              </Field>
               <Field
-                label="4º lugar (R$ fixo)"
+                label="4º lugar (%)"
                 htmlFor="premio4"
-                hint="O 3º lugar recebe a diferença que sobrar."
+                hint={`Somam ${somaPct}%. O 5º leva inscrição + 1 add-on, deduzido antes da reserva.`}
               >
                 <input
                   id="premio4"
                   name="premio4"
-                  defaultValue={settings.fourthFixed}
+                  defaultValue={settings.fourthPct}
                   inputMode="decimal"
                   className={`${inputClass} tnum text-right`}
                 />
               </Field>
             </div>
 
+            {somaPct !== 100 ? (
+              <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+                Os percentuais de 1º a 4º somam {somaPct}%, não 100%. A premiação é repartida
+                proporcionalmente para não estourar o caixa, mas vale conferir os valores.
+              </p>
+            ) : null}
+
             {/* Prévia concreta da regra. */}
             <div className="mt-4 rounded-lg border border-ink-800 bg-ink-950 px-4 py-3">
               <p className="text-[0.65rem] font-bold uppercase tracking-[0.14em] text-chalk-dim">
-                Exemplo com arrecadação de {formatBRL(10000)}
+                Exemplo: {formatBRL(10000)} arrecadados com 30 jogadores
               </p>
               <ul className="tnum mt-2 space-y-0.5 text-sm text-chalk-dim">
                 <li>
-                  Reserva da Final:{" "}
+                  Taxa de administração:{" "}
+                  <strong className="text-chalk">− {formatBRL(exemplo.adminFeeTotal)}</strong>
+                </li>
+                <li>
+                  Prêmio do 5º (inscrição + add-on):{" "}
+                  <strong className="text-chalk">− {formatBRL(exemplo.fifthPrize)}</strong>
+                </li>
+                <li>
+                  Reserva Etapa Final:{" "}
                   <strong className="text-gold">{formatBRL(exemplo.reserve)}</strong>
                 </li>
                 {exemplo.byPlacement.map((prize) => (

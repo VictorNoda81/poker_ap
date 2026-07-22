@@ -16,7 +16,6 @@
  */
 
 import { fromCents, round2, toCents } from "./money";
-import { computeReserve } from "./prizes";
 
 export type PlayerType = "socio" | "convidado" | "indefinido";
 
@@ -190,15 +189,15 @@ export function compareRankingRows(a: RankingRow, b: RankingRow): number {
 
 /**
  * Reserva acumulada da temporada para a Etapa Final.
- * Soma a reserva de todas as etapas regulares (a Final não gera reserva nova).
+ *
+ * Recebe a reserva JÁ CALCULADA de cada etapa (a conta depende de custos e do
+ * número de jogadores, que são da etapa, não do ranking). A Etapa Final não
+ * gera reserva nova — ela distribui o acumulado.
  */
-export function accumulatedFinalReserve(
-  stages: { gross: number; isFinal: boolean }[],
-  finalReservePct: number,
-): number {
+export function accumulatedFinalReserve(stages: { reserve: number; isFinal: boolean }[]): number {
   const totalCents = stages
     .filter((stage) => !stage.isFinal)
-    .reduce((sum, stage) => sum + toCents(computeReserve(stage.gross, finalReservePct)), 0);
+    .reduce((sum, stage) => sum + toCents(stage.reserve), 0);
   return fromCents(totalCents);
 }
 

@@ -7,140 +7,153 @@ import {
   validatePrizeDistribution,
 } from "./prizes";
 
-/** Arrecadação real de cada etapa de 2026, deduzida da linha dos 10% da planilha. */
-const ARRECADACAO_2026 = [6500, 10000, 9000, 8100, 11500, 7000];
+/** Etapa de referência para conferir a cascata na mão. */
+const ETAPA = { gross: 10000, participants: 30, otherCosts: 500 };
 
-describe("reserva da Etapa Final", () => {
-  it("separa 10% da arrecadação de cada etapa de 2026", () => {
-    const reservas = ARRECADACAO_2026.map((gross) => computeReserve(gross, 10));
-    expect(reservas).toEqual([650, 1000, 900, 810, 1150, 700]);
+describe("cascata de deduções", () => {
+  const r = suggestStagePrizes(ETAPA);
+
+  it("cobra a taxa de administração por jogador", () => {
+    expect(r.adminFeeTotal).toBe(1800); // 30 × R$ 60
   });
 
-  it("a soma bate com o acumulado da planilha (R$ 5.210)", () => {
-    const total = ARRECADACAO_2026.reduce((sum, g) => sum + computeReserve(g, 10), 0);
-    expect(total).toBe(5210);
+  it("paga ao 5º a inscrição mais um add-on", () => {
+    expect(r.fifthPrize).toBe(310); // 160 + 150
+    expect(r.byPlacement.find((p) => p.placement === 5)?.amount).toBe(310);
   });
 
-  it("aceita percentual customizado", () => {
-    expect(computeReserve(1000, 15)).toBe(150);
-    expect(computeReserve(1000, 0)).toBe(0);
+  it("a base da reserva é a arrecadação menos taxa, custos e o prêmio do 5º", () => {
+    expect(r.reserveBase).toBe(7390); // 10000 − 1800 − 500 − 310
   });
 
-  it("arredonda para o centavo, sem erro de ponto flutuante", () => {
-    expect(computeReserve(333.33, 10)).toBe(33.33);
+  it("separa 10% da base para o Pote da Etapa Final", () => {
+    expect(r.reserve).toBe(739);
+    expect(r.distributable).toBe(6651);
+  });
+
+  it("divide o distribuível em 42 / 27 / 18 / 13", () => {
+    const porColocacao = Object.fromEntries(r.byPlacement.map((p) => [p.placement, p.amount]));
+    expect(porColocacao[1]).toBe(2793.42); // 42% de 6651
+    expect(porColocacao[2]).toBe(1795.77); // 27%
+    expect(porColocacao[3]).toBe(1197.18); // 18%
+    expect(porColocacao[4]).toBe(864.63); // 13% — recebe o resto, fechando a conta
+  });
+
+  it("tudo somado reconstrói a arrecadação, sem centavo perdido", () => {
+    const soma = r.adminFeeTotal + r.otherCosts + r.reserve + r.totalPrizes;
+    expect(soma).toBeCloseTo(ETAPA.gross, 2);
+  });
+
+  it("os prêmios de 1º a 4º somam exatamente o distribuível", () => {
+    const soma = r.byPlacement
+      .filter((p) => p.placement <= 4)
+      .reduce((s, p) => s + p.amount, 0);
+    expect(soma).toBeCloseTo(r.distributable, 2);
   });
 });
 
-describe("distribuição padrão da etapa", () => {
-  it("calcula a etapa 1 de 2026 (R$ 6.500) conforme a regra da liga", () => {
-    const result = suggestStagePrizes(6500);
-
-    expect(result.reserve).toBe(650); // 10% para a Final
-    expect(result.distributable).toBe(5850); // 6500 − 650
-    expect(result.byPlacement).toEqual([
-      { placement: 1, amount: 2925 }, // 50% de 5850
-      { placement: 2, amount: 1755 }, // 30% de 5850
-      { placement: 3, amount: 1020 }, // a diferença
-      { placement: 4, amount: 150 },  // valor fixo
-    ]);
-  });
-
-  it("calcula a etapa 4 de 2026 (R$ 8.100), que não é múltiplo redondo", () => {
-    const result = suggestStagePrizes(8100);
-    expect(result.reserve).toBe(810);
-    expect(result.distributable).toBe(7290);
-    expect(result.byPlacement.map((p) => p.amount)).toEqual([3645, 2187, 1308, 150]);
-  });
-
-  it("os prêmios sempre somam exatamente o distribuível, em todas as etapas", () => {
-    for (const gross of ARRECADACAO_2026) {
-      const result = suggestStagePrizes(gross);
-      const soma = result.byPlacement.reduce((s, p) => s + p.amount, 0);
-      expect(soma).toBeCloseTo(result.distributable, 2);
-      // E o distribuível + reserva reconstroem a arrecadação.
-      expect(result.distributable + result.reserve).toBeCloseTo(gross, 2);
-    }
-  });
-
+describe("arredondamento", () => {
   it("fecha exato mesmo com arrecadação de centavo quebrado", () => {
-    const result = suggestStagePrizes(7333.37);
-    const soma = result.byPlacement.reduce((s, p) => s + p.amount, 0);
-    expect(soma).toBeCloseTo(result.distributable, 2);
+    const r = suggestStagePrizes({ gross: 7333.37, participants: 23, otherCosts: 137.11 });
+    const soma = r.byPlacement.filter((p) => p.placement <= 4).reduce((s, p) => s + p.amount, 0);
+    expect(soma).toBeCloseTo(r.distributable, 2);
+    expect(r.adminFeeTotal + r.otherCosts + r.reserve + r.totalPrizes).toBeCloseTo(7333.37, 2);
+  });
+});
+
+describe("etapas fora do padrão", () => {
+  it("sem 5º colocado, não há prêmio de 5º e a base sobe", () => {
+    const r = suggestStagePrizes(ETAPA, DEFAULT_PRIZE_SETTINGS, [1, 2, 3, 4]);
+    expect(r.fifthPrize).toBe(0);
+    expect(r.reserveBase).toBe(7700); // 10000 − 1800 − 500
+    expect(r.byPlacement.some((p) => p.placement === 5)).toBe(false);
   });
 
-  it("dá tudo que sobra ao 3º quando não houve 4º colocado", () => {
-    const result = suggestStagePrizes(6500, DEFAULT_PRIZE_SETTINGS, [1, 2, 3]);
-    expect(result.byPlacement).toEqual([
-      { placement: 1, amount: 2925 },
-      { placement: 2, amount: 1755 },
-      { placement: 3, amount: 1170 }, // 1020 + os 150 do 4º
-    ]);
+  it("faltando o 4º, o percentual dele é repartido entre os presentes", () => {
+    const r = suggestStagePrizes(ETAPA, DEFAULT_PRIZE_SETTINGS, [1, 2, 3, 5]);
+    const soma = r.byPlacement.filter((p) => p.placement <= 4).reduce((s, p) => s + p.amount, 0);
+    // Continua pagando o distribuível inteiro, só que entre três.
+    expect(soma).toBeCloseTo(r.distributable, 2);
+    expect(r.byPlacement.some((p) => p.placement === 4)).toBe(false);
   });
 
-  it("zera o 3º e avisa quando o bolo não cobre 1º + 2º + 4º", () => {
-    // Arrecadação minúscula: 80% já vão para 1º e 2º, e ainda faltam os R$ 150.
-    const result = suggestStagePrizes(300);
-    expect(result.thirdWouldBeNegative).toBe(true);
-    expect(result.byPlacement.find((p) => p.placement === 3)?.amount).toBe(0);
+  it("avisa quando as deduções passam da arrecadação", () => {
+    // Etapa minúscula: a taxa dos jogadores já supera o que entrou em caixa.
+    const r = suggestStagePrizes({ gross: 300, participants: 30, otherCosts: 0 });
+    expect(r.shortfall).toBe(true);
+    expect(r.reserveBase).toBe(0);
+    expect(r.distributable).toBe(0);
+  });
+
+  it("respeita taxa de administração própria da etapa", () => {
+    const r = suggestStagePrizes({ ...ETAPA, adminFeePerPlayer: 0 });
+    expect(r.adminFeeTotal).toBe(0);
+    expect(r.reserveBase).toBe(9190); // 10000 − 0 − 500 − 310
   });
 
   it("respeita percentuais alterados pelo admin", () => {
-    const result = suggestStagePrizes(10000, {
+    const r = suggestStagePrizes(ETAPA, {
+      ...DEFAULT_PRIZE_SETTINGS,
       finalReservePct: 20,
-      firstPct: 60,
+      firstPct: 50,
       secondPct: 25,
-      fourthFixed: 200,
+      thirdPct: 15,
+      fourthPct: 10,
     });
-    expect(result.reserve).toBe(2000);
-    expect(result.distributable).toBe(8000);
-    expect(result.byPlacement.map((p) => p.amount)).toEqual([4800, 2000, 1000, 200]);
+    expect(r.reserve).toBe(1478); // 20% de 7390
+    expect(r.byPlacement.find((p) => p.placement === 1)?.amount).toBe(2956); // 50% de 5912
   });
 });
 
-describe("premiação da Etapa Final", () => {
-  it("distribui a reserva acumulada da temporada sem separar reserva nova", () => {
-    const result = suggestFinalPrizes(5210, 0);
-    expect(result.reserve).toBe(0);
-    expect(result.distributable).toBe(5210);
-    const soma = result.byPlacement.reduce((s, p) => s + p.amount, 0);
-    expect(soma).toBeCloseTo(5210, 2);
+describe("computeReserve", () => {
+  it("devolve só a reserva da cascata", () => {
+    expect(computeReserve(ETAPA)).toBe(739);
   });
 
-  it("soma os buy-ins da própria Final ao bolo acumulado", () => {
-    const result = suggestFinalPrizes(5210, 3000);
-    expect(result.distributable).toBe(8210);
+  it("percentual zero não reserva nada", () => {
+    expect(computeReserve(ETAPA, { ...DEFAULT_PRIZE_SETTINGS, finalReservePct: 0 })).toBe(0);
+  });
+});
+
+describe("Etapa Final", () => {
+  it("soma o acumulado do ano ao que sobra da própria final, sem reservar de novo", () => {
+    const r = suggestFinalPrizes(5210, { gross: 4000, participants: 20, otherCosts: 0 });
+    expect(r.reserve).toBe(0);
+    // (4000 − 1200 de taxa − 310 do 5º) + 5210 acumulado
+    expect(r.distributable).toBe(7700);
+    const soma = r.byPlacement.filter((p) => p.placement <= 4).reduce((s, p) => s + p.amount, 0);
+    expect(soma).toBeCloseTo(r.distributable, 2);
+  });
+
+  it("sem buy-ins na final, distribui só o acumulado", () => {
+    const r = suggestFinalPrizes(5210, { gross: 0, participants: 0, otherCosts: 0 }, DEFAULT_PRIZE_SETTINGS, [1, 2, 3, 4]);
+    expect(r.distributable).toBe(5210);
   });
 });
 
 describe("validação da premiação (aviso não-bloqueante)", () => {
-  it("confirma quando prêmios + reserva fecham com a arrecadação", () => {
-    const check = validatePrizeDistribution(6500, 650, [2925, 1755, 1020, 150]);
+  it("confirma quando custos, reserva e prêmios fecham com a arrecadação", () => {
+    const check = validatePrizeDistribution(10000, 2300, 739, [2793.42, 1795.77, 1197.18, 864.63, 310]);
     expect(check.balanced).toBe(true);
     expect(check.difference).toBe(0);
   });
 
   it("acusa sobra quando faltou distribuir", () => {
-    const check = validatePrizeDistribution(6500, 650, [2925, 1755]);
+    const check = validatePrizeDistribution(10000, 2300, 739, [2793.42, 1795.77]);
     expect(check.balanced).toBe(false);
-    expect(check.difference).toBe(1170);
+    expect(check.difference).toBeGreaterThan(0);
     expect(check.message).toContain("Sobrando");
   });
 
-  it("acusa estouro quando pagaram além da arrecadação", () => {
-    const check = validatePrizeDistribution(6500, 650, [3000, 1755, 1020, 150, 500]);
+  it("acusa estouro quando pagaram além do caixa", () => {
+    const check = validatePrizeDistribution(10000, 2300, 739, [5000, 3000, 1500, 900, 310]);
     expect(check.balanced).toBe(false);
     expect(check.difference).toBeLessThan(0);
     expect(check.message).toContain("Estourou");
   });
 
   it("aceita divisão combinada fora do padrão, desde que a soma feche", () => {
-    // A liga combinou premiar também o 5º lugar, redividindo o bolo.
-    const check = validatePrizeDistribution(6500, 650, [2500, 1500, 1000, 500, 350]);
-    expect(check.balanced).toBe(true);
-  });
-
-  it("não gera falso alarme por arredondamento de ponto flutuante", () => {
-    const check = validatePrizeDistribution(8100, 810, [3645, 2187, 1308, 150]);
+    const check = validatePrizeDistribution(10000, 2300, 739, [3000, 1700, 1100, 851, 310]);
     expect(check.balanced).toBe(true);
   });
 });

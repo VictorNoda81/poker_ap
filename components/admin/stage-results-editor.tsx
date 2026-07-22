@@ -14,9 +14,7 @@ import { pointsForPlacement, suggestAmountPaid } from "@/lib/domain/scoring";
 import type { RankingPlayer } from "@/lib/domain/ranking";
 
 export interface EditorSettings extends PrizeSettings {
-  buyin: number;
   rebuy: number;
-  addon: number;
   pointsBelowCutoff: number;
 }
 
@@ -71,6 +69,8 @@ export function StageResultsEditor({
   isFinal,
   accumulatedReserve,
   initialGrossOverride,
+  initialAdminFeePerPlayer,
+  initialOtherCosts,
 }: {
   stageId: string;
   players: RankingPlayer[];
@@ -81,12 +81,21 @@ export function StageResultsEditor({
   /** Reserva acumulada da temporada — só usada na Etapa Final. */
   accumulatedReserve: number;
   initialGrossOverride: number | null;
+  /** null = usa a taxa padrão da temporada. */
+  initialAdminFeePerPlayer: number | null;
+  initialOtherCosts: number;
 }) {
   const [rows, setRows] = useState<Row[]>(() => initialEntries.map(toRow));
   const [search, setSearch] = useState("");
   const [manualGross, setManualGross] = useState(initialGrossOverride !== null);
   const [grossInput, setGrossInput] = useState(
     initialGrossOverride === null ? "" : String(initialGrossOverride),
+  );
+  const [taxaInput, setTaxaInput] = useState(
+    String(initialAdminFeePerPlayer ?? settings.adminFeePerPlayer),
+  );
+  const [custosInput, setCustosInput] = useState(
+    initialOtherCosts > 0 ? String(initialOtherCosts) : "",
   );
 
   const playersById = useMemo(
@@ -115,25 +124,35 @@ export function StageResultsEditor({
 
   const gross = manualGross ? (parseMoney(grossInput) ?? 0) : sumPaid;
 
+  const taxaPorJogador = parseMoney(taxaInput) ?? settings.adminFeePerPlayer;
+  const outrosCustos = parseMoney(custosInput) ?? 0;
+
   const breakdown = useMemo(() => {
     const placements = rows
       .map((row) => Number(row.placement))
-      .filter((placement) => [1, 2, 3, 4].includes(placement));
+      .filter((placement) => [1, 2, 3, 4, 5].includes(placement));
 
-    const available = placements.length > 0 ? [...new Set(placements)].sort() : [1, 2, 3, 4];
+    const available = placements.length > 0 ? [...new Set(placements)].sort() : [1, 2, 3, 4, 5];
+    const custos = {
+      gross,
+      participants: rows.length,
+      adminFeePerPlayer: taxaPorJogador,
+      otherCosts: outrosCustos,
+    };
 
     return isFinal
-      ? suggestFinalPrizes(accumulatedReserve, gross, settings, available)
-      : suggestStagePrizes(gross, settings, available);
-  }, [rows, gross, isFinal, accumulatedReserve, settings]);
+      ? suggestFinalPrizes(accumulatedReserve, custos, settings, available)
+      : suggestStagePrizes(custos, settings, available);
+  }, [rows, gross, isFinal, accumulatedReserve, settings, taxaPorJogador, outrosCustos]);
 
   const prizeTotal = round2(rows.reduce((sum, row) => sum + (parseMoney(row.prize) ?? 0), 0));
 
   // Na Final não há reserva nova — o bolo é o acumulado, então a conferência
   // compara contra o pool total em vez da arrecadação da etapa.
+  const deducoes = round2(breakdown.adminFeeTotal + breakdown.otherCosts);
   const check = isFinal
-    ? validatePrizeDistribution(round2(accumulatedReserve + gross), 0, [prizeTotal])
-    : validatePrizeDistribution(gross, breakdown.reserve, [prizeTotal]);
+    ? validatePrizeDistribution(round2(accumulatedReserve + gross), deducoes, 0, [prizeTotal])
+    : validatePrizeDistribution(gross, deducoes, breakdown.reserve, [prizeTotal]);
 
   // --- Manipulação das linhas ----------------------------------------------
 
@@ -245,6 +264,8 @@ export function StageResultsEditor({
       {manualGross ? (
         <input type="hidden" name="arrecadacaoManual" value={String(gross)} />
       ) : null}
+      <input type="hidden" name="taxaPorJogador" value={String(taxaPorJogador)} />
+      <input type="hidden" name="outrosCustos" value={String(outrosCustos)} />
 
       {/* ------------------------------------------------------------------ */}
       {/* Adicionar participantes                                             */}
@@ -498,13 +519,57 @@ export function StageResultsEditor({
           </div>
         ) : null}
 
+        {/* Custos da etapa: saem da arrecadação antes dos 10% da reserva. */}
+        <div className="mb-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label
+              htmlFor="taxaInput"
+              className="mb-1.5 block text-[0.68rem] font-bold uppercase tracking-[0.14em] text-chalk-dim"
+            >
+              Taxa de administração por jogador (R$)
+            </label>
+            <input
+              id="taxaInput"
+              value={taxaInput}
+              onChange={(event) => setTaxaInput(event.target.value)}
+              inputMode="decimal"
+              placeholder={String(settings.adminFeePerPlayer)}
+              className={`${inputClass} tnum text-right`}
+            />
+            <p className="mt-1 text-xs text-chalk-dim">
+              {rows.length} jogadores × {formatBRL(taxaPorJogador)} ={" "}
+              <strong className="text-chalk">{formatBRL(breakdown.adminFeeTotal)}</strong>
+            </p>
+          </div>
+          <div>
+            <label
+              htmlFor="custosInput"
+              className="mb-1.5 block text-[0.68rem] font-bold uppercase tracking-[0.14em] text-chalk-dim"
+            >
+              Outros custos (R$)
+            </label>
+            <input
+              id="custosInput"
+              value={custosInput}
+              onChange={(event) => setCustosInput(event.target.value)}
+              inputMode="decimal"
+              placeholder="0,00"
+              className={`${inputClass} tnum text-right`}
+            />
+            <p className="mt-1 text-xs text-chalk-dim">Troféu, garçons e afins.</p>
+          </div>
+        </div>
+
         <dl className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Metric label="Arrecadação" value={formatBRL(gross)} />
+          <Metric label="Taxa de administração" value={`− ${formatBRL(breakdown.adminFeeTotal)}`} />
+          <Metric label="Outros custos" value={`− ${formatBRL(breakdown.otherCosts)}`} />
+          <Metric label="Prêmio do 5º" value={`− ${formatBRL(breakdown.fifthPrize)}`} />
           {isFinal ? (
             <Metric label="Reserva acumulada" value={formatBRL(accumulatedReserve)} tone="gold" />
           ) : (
             <Metric
-              label={`Reserva da Final (${settings.finalReservePct}%)`}
+              label={`Reserva Etapa Final (${settings.finalReservePct}% de ${formatBRL(breakdown.reserveBase)})`}
               value={formatBRL(breakdown.reserve)}
               tone="gold"
             />
@@ -531,10 +596,9 @@ export function StageResultsEditor({
                 </li>
               ))}
             </ul>
-            {breakdown.thirdWouldBeNegative ? (
+            {breakdown.shortfall ? (
               <p className="mt-2 text-xs text-amber-300">
-                O valor arrecadado não cobre 1º, 2º e 4º lugares — o 3º ficou zerado. Ajuste os
-                prêmios manualmente.
+                As deduções passam da arrecadação — não sobra nada para distribuir.
               </p>
             ) : null}
           </div>
@@ -542,6 +606,12 @@ export function StageResultsEditor({
 
         {/* Avisos — nenhum deles bloqueia o salvamento. */}
         <div className="mt-4 space-y-2">
+          {breakdown.shortfall ? (
+            <p className="rounded-lg border border-cap-red/40 bg-cap-red/10 px-3 py-2 text-sm text-cap-red-light">
+              As deduções (taxa, custos e prêmio do 5º) passam da arrecadação desta etapa. Confira
+              os valores antes de salvar.
+            </p>
+          ) : null}
           {prizeTotal > 0 || gross > 0 ? (
             <p
               className={`rounded-lg border px-3 py-2 text-sm ${

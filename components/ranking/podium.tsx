@@ -21,7 +21,9 @@ function label(place: 1 | 2 | 3, inProgress: boolean): string {
 function PodiumCard({ row, inProgress }: { row: RankingRow; inProgress: boolean }) {
   const place = row.displayPosition as 1 | 2 | 3;
   const style = PODIUM_STYLE[place];
-  const semFinanceiro = row.totalPaid === 0 && row.totalReceived === 0;
+  // Sem o gasto de todas as etapas, o saldo não é calculável — mostrar um
+  // "lucro" só com prêmios seria enganoso.
+  const semFinanceiro = row.stagesMissingFinancials > 0 || row.totalPaid === 0;
 
   return (
     <Link

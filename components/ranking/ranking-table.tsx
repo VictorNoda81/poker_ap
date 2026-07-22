@@ -38,9 +38,19 @@ function balanceClass(balance: number): string {
   return "text-chalk-dim";
 }
 
-/** ROI = quanto recebeu ÷ quanto gastou. null quando não há gasto lançado. */
+/**
+ * Enquanto houver etapa sem o valor gasto lançado, "Pago", "Saldo" e "ROI" não
+ * são calculáveis: somar prêmios contra um gasto parcial mostraria lucro que
+ * não existe. Nesses casos a tabela exibe "—".
+ */
+function gastoIncompleto(row: RankingRow): boolean {
+  return row.stagesMissingFinancials > 0;
+}
+
+/** ROI = quanto recebeu ÷ quanto gastou. null quando o gasto não é conhecido. */
 function roiOf(row: RankingRow): number | null {
-  return row.totalPaid > 0 ? row.totalReceived / row.totalPaid : null;
+  if (gastoIncompleto(row) || row.totalPaid <= 0) return null;
+  return row.totalReceived / row.totalPaid;
 }
 
 type SortKey =
@@ -318,7 +328,7 @@ export function RankingTable({
 
           <tbody>
             {filtered.map((row) => {
-              const semFinanceiro = row.totalPaid === 0 && row.totalReceived === 0;
+              const semGasto = gastoIncompleto(row) || row.totalPaid === 0;
               const roi = roiOf(row);
               return (
                 <tr
@@ -385,17 +395,17 @@ export function RankingTable({
                   {showFinancials ? (
                     <>
                       <td className="tnum px-2 py-2.5 text-right text-chalk-dim">
-                        {semFinanceiro ? "—" : formatBRL(row.totalPaid)}
+                        {semGasto ? "—" : formatBRL(row.totalPaid)}
                       </td>
                       <td className="tnum px-2 py-2.5 text-right text-chalk-dim">
-                        {semFinanceiro ? "—" : formatBRL(row.totalReceived)}
+                        {row.totalReceived === 0 ? "—" : formatBRL(row.totalReceived)}
                       </td>
                       <td
                         className={`tnum px-2 py-2.5 text-right font-bold ${
-                          semFinanceiro ? "text-chalk-dim" : balanceClass(row.balance)
+                          semGasto ? "text-chalk-dim" : balanceClass(row.balance)
                         }`}
                       >
-                        {semFinanceiro ? "—" : formatBRLSigned(row.balance)}
+                        {semGasto ? "—" : formatBRLSigned(row.balance)}
                       </td>
                       <td
                         className={`tnum px-2 py-2.5 text-right font-semibold ${

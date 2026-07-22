@@ -298,6 +298,9 @@ export async function saveStageResults(formData: FormData): Promise<void> {
     .update({
       status: entries.length > 0 ? "completed" : "scheduled",
       gross_amount_override: grossOverride,
+      // Custos da etapa: entram na cascata antes da reserva da Etapa Final.
+      admin_fee_per_player: optionalNumber(formData, "taxaPorJogador"),
+      other_costs: optionalNumber(formData, "outrosCustos") ?? 0,
     })
     .eq("id", stageId);
   if (stageError) {
@@ -364,7 +367,9 @@ export async function saveSettings(formData: FormData): Promise<void> {
       final_reserve_pct: number(formData, "reserva", 10),
       prize_first_pct: number(formData, "premio1", 50),
       prize_second_pct: number(formData, "premio2", 30),
-      prize_fourth_fixed: number(formData, "premio4", 150),
+      prize_third_pct: number(formData, "premio3", 18),
+      prize_fourth_pct: number(formData, "premio4", 13),
+      admin_fee_per_player: number(formData, "taxaAdmin", 60),
       points_below_cutoff: Math.trunc(number(formData, "pontosAbaixo", 5)),
       final_invite_count: Math.trunc(number(formData, "convidadosFinal", 20)),
     },

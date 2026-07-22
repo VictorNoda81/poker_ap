@@ -37,6 +37,8 @@ interface Aggregate {
   bestStagePlacementCount: number;
   /** Temporadas em que foi campeão (só conta temporada encerrada). */
   championSeasons: number[];
+  /** Etapas sem o valor gasto lançado — enquanto houver, o saldo não fecha. */
+  stagesMissingFinancials: number;
   /** Pontos por etapa jogada, no conjunto de temporadas selecionado. */
   avgPoints: number;
   /** Colocação média por etapa com posição registrada. null se nenhuma. */
@@ -63,6 +65,7 @@ function aggregate(player: PlayerAcrossSeasons, years: Set<number>): Aggregate {
     bestStagePlacement: null,
     bestStagePlacementCount: 0,
     championSeasons: [],
+    stagesMissingFinancials: 0,
     avgPoints: 0,
     avgPlacement: null,
   };
@@ -80,6 +83,7 @@ function aggregate(player: PlayerAcrossSeasons, years: Set<number>): Aggregate {
       agg.bestPosition === null ? stat.position : Math.min(agg.bestPosition, stat.position);
     placementSum += stat.placementSum;
     placedStages += stat.placedStages;
+    agg.stagesMissingFinancials += stat.stagesMissingFinancials;
 
     if (stat.isChampion) agg.championSeasons.push(stat.year);
 
@@ -266,7 +270,8 @@ export function PlayersDirectory({
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {linhas.map(({ player, agg }) => {
-            const semFinanceiro = agg.totalPaid === 0 && agg.totalReceived === 0;
+            // Sem o gasto de todas as etapas, o saldo não é calculável.
+            const semFinanceiro = agg.stagesMissingFinancials > 0 || agg.totalPaid === 0;
             return (
               <li key={player.player.id}>
                 <Link

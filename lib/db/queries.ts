@@ -8,7 +8,7 @@
  */
 
 import { round2 } from "@/lib/domain/money";
-import { computeReserve, type PrizeSettings } from "@/lib/domain/prizes";
+import { suggestStagePrizes, type PrizeSettings } from "@/lib/domain/prizes";
 import {
   buildRanking,
   type RankingEntry,
@@ -28,21 +28,21 @@ import {
 } from "./types";
 
 export interface SeasonSettings extends PrizeSettings {
-  buyin: number;
   rebuy: number;
-  addon: number;
   pointsBelowCutoff: number;
   finalInviteCount: number;
 }
 
 export const FALLBACK_SETTINGS: SeasonSettings = {
-  buyin: 150,
+  buyin: 160,
   rebuy: 100,
   addon: 150,
+  adminFeePerPlayer: 60,
   finalReservePct: 10,
-  firstPct: 50,
-  secondPct: 30,
-  fourthFixed: 150,
+  firstPct: 42,
+  secondPct: 27,
+  thirdPct: 18,
+  fourthPct: 13,
   pointsBelowCutoff: 5,
   finalInviteCount: 20,
 };
@@ -58,6 +58,14 @@ export interface StageSummary {
   gross: number;
   /** true quando a arrecadação veio de `gross_amount_override`, não do detalhe por jogador. */
   grossIsManual: boolean;
+  /** Taxa de administração cobrada por jogador nesta etapa. */
+  adminFeePerPlayer: number;
+  /** Taxa × jogadores. */
+  adminFeeTotal: number;
+  /** Troféu, garçons e afins. */
+  otherCosts: number;
+  /** adminFeeTotal + otherCosts — o que sai da arrecadação sem ir a jogador. */
+  deductions: number;
   reserve: number;
   /**
    * Prêmios da etapa. Quando ninguém teve prêmio lançado individualmente (é o
@@ -109,10 +117,12 @@ function mapSettings(row: SeasonSettingsRow | null): SeasonSettings {
     buyin: toNumberOr(row.buyin, FALLBACK_SETTINGS.buyin),
     rebuy: toNumberOr(row.rebuy, FALLBACK_SETTINGS.rebuy),
     addon: toNumberOr(row.addon, FALLBACK_SETTINGS.addon),
+    adminFeePerPlayer: toNumberOr(row.admin_fee_per_player, FALLBACK_SETTINGS.adminFeePerPlayer),
     finalReservePct: toNumberOr(row.final_reserve_pct, FALLBACK_SETTINGS.finalReservePct),
     firstPct: toNumberOr(row.prize_first_pct, FALLBACK_SETTINGS.firstPct),
     secondPct: toNumberOr(row.prize_second_pct, FALLBACK_SETTINGS.secondPct),
-    fourthFixed: toNumberOr(row.prize_fourth_fixed, FALLBACK_SETTINGS.fourthFixed),
+    thirdPct: toNumberOr(row.prize_third_pct, FALLBACK_SETTINGS.thirdPct),
+    fourthPct: toNumberOr(row.prize_fourth_pct, FALLBACK_SETTINGS.fourthPct),
     pointsBelowCutoff: row.points_below_cutoff ?? FALLBACK_SETTINGS.pointsBelowCutoff,
     finalInviteCount: row.final_invite_count ?? FALLBACK_SETTINGS.finalInviteCount,
   };
@@ -207,14 +217,30 @@ export async function getSeasonBundle(season: SeasonRow): Promise<SeasonBundle> 
     // O valor informado manualmente tem precedência: é o caso das etapas
     // importadas da planilha, onde só o total do pote é conhecido.
     const gross = override ?? sumPaid;
-    const reserve = row.is_final ? 0 : computeReserve(gross, settings.finalReservePct);
+
+    // Cascata da etapa: taxa de administração, outros custos e prêmio do 5º
+    // saem antes de calcular os 10% da reserva.
+    const adminFeePerPlayer = toNumber(row.admin_fee_per_player) ?? settings.adminFeePerPlayer;
+    const otherCosts = toNumberOr(row.other_costs, 0);
+    const temQuinto = stageEntries.some((e) => e.placement === 5);
+
+    const breakdown = suggestStagePrizes(
+      { gross, participants: stageEntries.length, adminFeePerPlayer, otherCosts },
+      settings,
+      temQuinto ? [1, 2, 3, 4, 5] : [1, 2, 3, 4],
+    );
+
+    // A Etapa Final não separa reserva nova — ela distribui o acumulado do ano.
+    const reserve = row.is_final ? 0 : breakdown.reserve;
+
     const prizesRecorded = stageEntries.reduce(
       (sum, e) => sum + toNumberOr(e.prize_amount, 0),
       0,
     );
     // Sem prêmio lançado por jogador, o que a mesa distribuiu foi a arrecadação
-    // menos a reserva da Etapa Final.
+    // menos os custos e menos a reserva.
     const prizesEstimated = prizesRecorded === 0 && gross > 0;
+    const deductions = round2(breakdown.adminFeeTotal + otherCosts);
 
     return {
       id: row.id,
@@ -225,9 +251,12 @@ export async function getSeasonBundle(season: SeasonRow): Promise<SeasonBundle> 
       status: row.status,
       gross,
       grossIsManual: override !== null,
-      // A Etapa Final não separa reserva nova — ela distribui o acumulado.
+      adminFeePerPlayer,
+      adminFeeTotal: breakdown.adminFeeTotal,
+      otherCosts,
+      deductions,
       reserve,
-      prizesPaid: prizesEstimated ? round2(gross - reserve) : prizesRecorded,
+      prizesPaid: prizesEstimated ? round2(gross - deductions - reserve) : prizesRecorded,
       prizesEstimated,
       prizesRecorded,
       participantCount: stageEntries.length,
@@ -495,6 +524,8 @@ export interface PlayerSeasonStat {
   /** Melhor colocação numa ETAPA e quantas vezes a atingiu. */
   bestPlacement: number | null;
   bestPlacementCount: number;
+  /** Etapas do jogador ainda sem o valor gasto lançado. */
+  stagesMissingFinancials: number;
   /** true se terminou em 1º numa temporada JÁ ENCERRADA (campeão de verdade). */
   isChampion: boolean;
 }
@@ -555,6 +586,7 @@ export async function getPlayersAcrossSeasons(): Promise<{
         placedStages: row.placedStages,
         bestPlacement: row.bestPlacement,
         bestPlacementCount: row.bestPlacementCount,
+        stagesMissingFinancials: row.stagesMissingFinancials,
         isChampion: encerrada && row.displayPosition === 1,
       };
     }
