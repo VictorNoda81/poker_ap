@@ -9,7 +9,12 @@
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildRanking, type RankingEntry, type RankingPlayer } from "../lib/domain/ranking";
+import {
+  buildRanking,
+  derivePlacements,
+  type RankingEntry,
+  type RankingPlayer,
+} from "../lib/domain/ranking";
 import { computeReserve } from "../lib/domain/prizes";
 import { formatBRL } from "../lib/domain/money";
 import { parseRankingWorkbook } from "../lib/import/parse-ranking";
@@ -29,14 +34,15 @@ for (const year of SEASONS) {
     memberNumber: null,
     invitedByName: null,
   }));
-  const entries: RankingEntry[] = parsed.results.map((r) => ({
-    stageId: `etapa-${r.stageNumber}`,
-    playerId: r.playerName,
-    placement: r.placement,
-    points: r.points,
-    amountPaid: null,
-    prizeAmount: 0,
-  }));
+  const entries: RankingEntry[] = derivePlacements(
+    parsed.results.map((r) => ({
+      stageId: `etapa-${r.stageNumber}`,
+      playerId: r.playerName,
+      points: r.points,
+      amountPaid: null,
+      prizeAmount: 0,
+    })),
+  );
   const ranking = buildRanking(players, entries);
 
   const reservaPlanilha = parsed.stages.reduce((s, e) => s + (e.reserveAmount ?? 0), 0);

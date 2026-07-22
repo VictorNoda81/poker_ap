@@ -93,16 +93,18 @@ export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
     <>
       <p className="mb-2 text-xs text-chalk-dim">Toque num título para ordenar.</p>
       <div className="card table-scroll">
-        <table className="w-full min-w-[40rem] table-fixed border-collapse text-sm">
-          {/* A última coluna não tem largura: ela absorve o espaço que sobra,
-              em vez de a coluna do nome esticar e afastar os números dele. */}
+        <table className="w-full min-w-[36rem] table-fixed border-collapse text-sm">
+          {/* Colunas estreitas de propósito: no celular, uma coluna de nome larga
+              empurrava os Pontos para longe do jogador. Nomes compridos truncam
+              com "…" e aparecem inteiros no title. A última coluna não tem
+              largura — ela absorve a sobra em vez de o nome esticar. */}
           <colgroup>
+            <col className="w-[3.5rem]" />
+            <col className="w-[9rem]" />
             <col className="w-[4.5rem]" />
-            <col className="w-[15rem]" />
-            <col className="w-[5.5rem]" />
-            <col className="w-[7rem]" />
-            <col className="w-[7rem]" />
-            <col className="w-[7rem]" />
+            <col className="w-[6.5rem]" />
+            <col className="w-[6.5rem]" />
+            <col className="w-[6.5rem]" />
             <col />
           </colgroup>
 
@@ -115,7 +117,7 @@ export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
                     key={c.key}
                     scope="col"
                     aria-sort={active ? (asc ? "ascending" : "descending") : "none"}
-                    className={`px-2 py-2.5 font-bold ${c.align === "right" ? "text-right" : ""}`}
+                    className={`px-1.5 py-2.5 font-bold ${c.align === "right" ? "text-right" : ""}`}
                   >
                     <button
                       type="button"
@@ -144,7 +146,7 @@ export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
                   key={row.playerId}
                   className="border-b border-ink-850/60 transition-colors last:border-0 hover:bg-ink-850/40"
                 >
-                  <td className="px-2 py-2.5">
+                  <td className="px-1.5 py-2.5">
                     <span
                       className={`tnum inline-flex items-center gap-1.5 text-base font-black ${placementClass(row.displayPlacement)}`}
                     >
@@ -158,9 +160,10 @@ export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
                     </span>
                   </td>
 
-                  <td className="px-2 py-2.5">
+                  <td className="px-1.5 py-2.5">
                     <Link
                       href={`/jogadores/${row.playerId}`}
+                      title={row.fullName}
                       className="block truncate font-semibold text-chalk transition-colors hover:text-cap-red-light"
                     >
                       {row.fullName}
@@ -182,21 +185,21 @@ export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
                     </div>
                   </td>
 
-                  <td className="tnum px-2 py-2.5 text-right text-base font-bold text-chalk">
+                  <td className="tnum px-1.5 py-2.5 text-right text-base font-bold text-chalk">
                     {formatNumber(row.points)}
                   </td>
-                  <td className="tnum px-2 py-2.5 text-right text-chalk-dim">
+                  <td className="tnum whitespace-nowrap px-1.5 py-2.5 text-right text-chalk-dim">
                     {row.amountPaid === null ? "—" : formatBRL(row.amountPaid)}
                   </td>
                   <td
-                    className={`tnum px-2 py-2.5 text-right ${
+                    className={`tnum whitespace-nowrap px-1.5 py-2.5 text-right ${
                       row.prizeAmount > 0 ? "font-bold text-gold" : "text-chalk-dim"
                     }`}
                   >
                     {row.prizeAmount > 0 ? formatBRL(row.prizeAmount) : "—"}
                   </td>
                   <td
-                    className={`tnum px-2 py-2.5 text-right font-semibold ${
+                    className={`tnum whitespace-nowrap px-1.5 py-2.5 text-right font-semibold ${
                       saldo === null
                         ? "text-chalk-dim"
                         : saldo > 0

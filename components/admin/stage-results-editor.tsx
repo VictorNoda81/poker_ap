@@ -467,7 +467,7 @@ export function StageResultsEditor({
           </div>
 
           <p className="border-t border-ink-800 px-4 py-3 text-xs text-chalk-dim">
-            Deixe a colocação em branco para “16º ou pior” — a pontuação é a mesma em toda a faixa.
+            Deixe a colocação em branco para “16º ou pior”: a pontuação é a mesma em toda a faixa e o app deduz a posição pelos pontos da etapa. Se você souber a ordem real do fundo da mesa, preencha (17º, 22º…) — aí o valor digitado vale e entra na classificação média do jogador.
             O valor gasto é o campo que vale; re-buys e add-on servem só para calculá-lo.
           </p>
         </section>

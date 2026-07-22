@@ -174,7 +174,7 @@ export default async function JogadorPage({ params }: Params) {
                             {r.placement !== null && r.placement <= 3 ? (
                               <MedalIcon className="h-4 w-4" place={r.placement as 1 | 2 | 3} />
                             ) : null}
-                            {r.placement === null ? "16º+" : `${r.placement}º`}
+                            {`${r.placement}º`}
                           </span>
                         </td>
                         <td className="tnum px-3 py-3 text-right font-bold text-chalk">

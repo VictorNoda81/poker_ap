@@ -16,6 +16,7 @@
  */
 
 import { fromCents, round2, toCents } from "./money";
+import { CUTOFF_PLACEMENT } from "./scoring";
 
 export type PlayerType = "socio" | "convidado" | "indefinido";
 
@@ -27,11 +28,48 @@ export interface RankingPlayer {
   invitedByName: string | null;
 }
 
+/**
+ * Preenche a colocação real de cada participação a partir da pontuação da etapa:
+ * quantos fizeram MAIS pontos naquela etapa, + 1.
+ *
+ * Por que deduzir em vez de ler a coluna do banco: a planilha só registrava
+ * posição até o corte — abaixo dele todo mundo recebe a mesma pontuação e a
+ * posição ficava em branco. Essas etapas então sumiam das estatísticas, e quem
+ * foi 5º uma vez e mal nas outras aparecia com classificação média 5,0.
+ *
+ * Empate em pontos = mesma colocação, e a seguinte pula (1, 2, 2, 4). É o único
+ * critério que os dados oferecem: abaixo do corte ninguém anotou quem caiu antes.
+ */
+export function derivePlacements<
+  T extends { stageId: string; points: number; placement?: number | null },
+>(entries: readonly T[]): (T & { placement: number })[] {
+  const pontosPorEtapa = new Map<string, number[]>();
+  for (const e of entries) {
+    const lista = pontosPorEtapa.get(e.stageId) ?? [];
+    lista.push(e.points);
+    pontosPorEtapa.set(e.stageId, lista);
+  }
+  return entries.map((e) => ({
+    ...e,
+    // Exceção: uma colocação registrada ABAIXO do corte só pode ter sido
+    // digitada por quem viu a mesa (a pontuação não a revela), então ela vence
+    // a dedução. Serve para as etapas em que a liga anotar a ordem completa.
+    placement:
+      e.placement != null && e.placement >= CUTOFF_PLACEMENT
+        ? e.placement
+        : (pontosPorEtapa.get(e.stageId) ?? []).filter((p) => p > e.points).length + 1,
+  }));
+}
+
 export interface RankingEntry {
   stageId: string;
   playerId: string;
-  /** null = participou, colocação exata não registrada (16º ou pior). */
-  placement: number | null;
+  /**
+   * Colocação REAL na etapa. Quem terminou abaixo do corte não tinha posição
+   * registrada na planilha (todos pontuam igual), então ela é deduzida da
+   * pontuação da etapa — e entra normalmente nas médias.
+   */
+  placement: number;
   points: number;
   /** null = valor gasto ainda não informado. */
   amountPaid: number | null;
@@ -53,15 +91,15 @@ export interface RankingRow {
   totalPaid: number;
   totalReceived: number;
   balance: number;
-  /** Média só das etapas em que jogou E teve colocação registrada. */
+  /** Média da colocação em TODAS as etapas que jogou. */
   averagePlacement: number | null;
   /** Média só das etapas em que jogou. */
   averagePoints: number;
-  /** Soma das colocações registradas — para reagregar médias entre temporadas. */
+  /** Soma das colocações — para reagregar médias entre temporadas. */
   placementSum: number;
-  /** Nº de etapas com colocação registrada (exclui "16º ou pior"). */
+  /** Nº de etapas com colocação (hoje, todas as jogadas). */
   placedStages: number;
-  /** Melhor colocação da temporada (menor número). null se nenhuma registrada. */
+  /** Melhor colocação da temporada (menor número). null se não jogou. */
   bestPlacement: number | null;
   /** Quantas vezes o jogador atingiu essa melhor colocação. */
   bestPlacementCount: number;
@@ -113,16 +151,14 @@ export function buildRanking(
         totalPaid += entry.amountPaid;
       }
 
-      if (entry.placement !== null && entry.placement !== undefined) {
-        placementSum += entry.placement;
-        placementCount += 1;
-        if (bestPlacement === null || entry.placement < bestPlacement) {
-          bestPlacement = entry.placement;
-        }
-        if (entry.placement === 1) wins += 1;
-        else if (entry.placement === 2) seconds += 1;
-        else if (entry.placement === 3) thirds += 1;
+      placementSum += entry.placement;
+      placementCount += 1;
+      if (bestPlacement === null || entry.placement < bestPlacement) {
+        bestPlacement = entry.placement;
       }
+      if (entry.placement === 1) wins += 1;
+      else if (entry.placement === 2) seconds += 1;
+      else if (entry.placement === 3) thirds += 1;
     }
 
     const stagesPlayed = playerEntries.length;

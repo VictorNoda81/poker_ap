@@ -7,7 +7,7 @@
 
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildRanking, type RankingEntry, type RankingPlayer } from "../domain/ranking";
+import { buildRanking, derivePlacements, type RankingPlayer } from "../domain/ranking";
 import { parseRankingWorkbook, playerKey } from "./parse-ranking";
 
 const DATA = path.resolve(__dirname, "../../data");
@@ -21,14 +21,16 @@ function totaisPeloApp(parsed: ReturnType<typeof parseRankingWorkbook>) {
     memberNumber: null,
     invitedByName: null,
   }));
-  const entries: RankingEntry[] = parsed.results.map((r) => ({
-    stageId: `etapa-${r.stageNumber}`,
-    playerId: r.playerName,
-    placement: r.placement,
-    points: r.points,
-    amountPaid: null,
-    prizeAmount: 0,
-  }));
+  // A colocação é deduzida da pontuação da etapa, como no app.
+  const entries = derivePlacements(
+    parsed.results.map((r) => ({
+      stageId: `etapa-${r.stageNumber}`,
+      playerId: r.playerName,
+      points: r.points,
+      amountPaid: null,
+      prizeAmount: 0,
+    })),
+  );
   return buildRanking(players, entries);
 }
 

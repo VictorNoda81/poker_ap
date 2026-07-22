@@ -11,6 +11,7 @@ import { round2 } from "@/lib/domain/money";
 import { suggestStagePrizes, type PrizeSettings } from "@/lib/domain/prizes";
 import {
   buildRanking,
+  derivePlacements,
   type RankingEntry,
   type RankingPlayer,
   type RankingRow,
@@ -192,14 +193,18 @@ export async function getSeasonBundle(season: SeasonRow): Promise<SeasonBundle> 
     entryRows = (data ?? []) as StageEntryRow[];
   }
 
-  const entries: RankingEntry[] = entryRows.map((row) => ({
-    stageId: row.stage_id,
-    playerId: row.player_id,
-    placement: row.placement,
-    points: row.points,
-    amountPaid: toNumber(row.amount_paid),
-    prizeAmount: toNumberOr(row.prize_amount, 0),
-  }));
+  // A colocação vem deduzida da pontuação da etapa (ver `derivePlacements`), e
+  // não da coluna `placement`: abaixo do corte a planilha não registrava posição.
+  const entries: RankingEntry[] = derivePlacements(
+    entryRows.map((row) => ({
+      stageId: row.stage_id,
+      playerId: row.player_id,
+      placement: row.placement,
+      points: row.points,
+      amountPaid: toNumber(row.amount_paid),
+      prizeAmount: toNumberOr(row.prize_amount, 0),
+    })),
+  );
 
   // --- Resumo por etapa ----------------------------------------------------
   const byStage = new Map<string, StageEntryRow[]>();
@@ -353,6 +358,21 @@ export async function getStageDetail(stageId: string): Promise<StageDetail | nul
 
   const rows = (entryRows ?? []) as StageEntryRow[];
 
+  // Mesma dedução usada no ranking, para a etapa e a ficha do jogador nunca
+  // discordarem sobre em que lugar alguém terminou.
+  const colocacaoDe = new Map(
+    derivePlacements(
+      rows.map((r) => ({
+        stageId: r.stage_id,
+        id: r.id,
+        points: r.points,
+        placement: r.placement,
+      })),
+    ).map(
+      (r) => [r.id, r.placement] as const,
+    ),
+  );
+
   const entries: StageEntryDetail[] = rows
     .map((row) => ({
       player: playersById.get(row.player_id) ?? {
@@ -363,8 +383,7 @@ export async function getStageDetail(stageId: string): Promise<StageDetail | nul
         invitedByName: null,
       },
       placement: row.placement,
-      // Quantos fizeram MAIS pontos + 1: empate em pontos = mesma colocação.
-      displayPlacement: rows.filter((other) => other.points > row.points).length + 1,
+      displayPlacement: colocacaoDe.get(row.id) ?? 1,
       points: row.points,
       amountPaid: toNumber(row.amount_paid),
       prizeAmount: toNumberOr(row.prize_amount, 0),
@@ -390,7 +409,8 @@ export interface PlayerStageResult {
   stageNumber: number;
   eventDate: string;
   isFinal: boolean;
-  placement: number | null;
+  /** Colocação real na etapa (deduzida da pontuação). */
+  placement: number;
   points: number;
   amountPaid: number | null;
   prizeAmount: number;

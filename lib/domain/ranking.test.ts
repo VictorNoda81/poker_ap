@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   accumulatedFinalReserve,
   buildRanking,
+  derivePlacements,
   suggestFinalInvitees,
   type RankingEntry,
   type RankingPlayer,
@@ -14,7 +15,7 @@ function player(id: string, fullName: string): RankingPlayer {
 function entry(
   stageId: string,
   playerId: string,
-  placement: number | null,
+  placement: number,
   points: number,
   amountPaid: number | null = null,
   prizeAmount = 0,
@@ -68,19 +69,61 @@ describe("buildRanking", () => {
     expect(ana.averagePoints).toBe(44); // (55 + 33) / 2
   });
 
-  it("colocação nula ('16º ou pior') entra na média de pontos mas não na de classificação", () => {
+  it("etapa abaixo do corte conta na média com a colocação deduzida", () => {
+    // O caso que motivou a mudança: quem foi bem em UMA etapa e mal nas outras
+    // aparecia com a média da única etapa colocada — 2,0 aqui, em vez de 9,0.
     const players = [player("a", "Ana")];
-    const entries = [entry("e1", "a", 2, 48), entry("e2", "a", null, 5)];
+    // e2: mais 15 jogadores pontuaram acima dela, logo Ana terminou em 16º.
+    const outros = Array.from({ length: 15 }, (_, i) => player(`x${i}`, `Rival ${i}`));
+    const entries = derivePlacements([
+      { stageId: "e1", playerId: "a", points: 48, amountPaid: null, prizeAmount: 0 },
+      { stageId: "e1", playerId: "x0", points: 55, amountPaid: null, prizeAmount: 0 },
+      { stageId: "e2", playerId: "a", points: 5, amountPaid: null, prizeAmount: 0 },
+      ...outros.map((p, i) => ({
+        stageId: "e2",
+        playerId: p.id,
+        points: 6 + i,
+        amountPaid: null,
+        prizeAmount: 0,
+      })),
+    ]);
 
-    const [ana] = buildRanking(players, entries);
+    const ana = buildRanking([...players, ...outros], entries).find(
+      (r) => r.player.id === "a",
+    )!;
     expect(ana.stagesPlayed).toBe(2);
     expect(ana.averagePoints).toBe(26.5); // (48 + 5) / 2
-    expect(ana.averagePlacement).toBe(2); // só a etapa com colocação registrada
+    expect(ana.averagePlacement).toBe(9); // (2 + 16) / 2
     expect(ana.bestPlacement).toBe(2);
-    // Somas brutas expostas para reagregar médias entre temporadas: a etapa
-    // "16º+" fica de fora da soma de colocações e da contagem de etapas colocadas.
-    expect(ana.placementSum).toBe(2);
-    expect(ana.placedStages).toBe(1);
+    // Somas brutas para reagregar médias entre temporadas: agora TODA etapa
+    // jogada tem colocação, então placedStages = stagesPlayed.
+    expect(ana.placementSum).toBe(18);
+    expect(ana.placedStages).toBe(2);
+  });
+
+  it("derivePlacements empata quem fez os mesmos pontos e pula a seguinte", () => {
+    const colocacoes = derivePlacements([
+      { stageId: "e1", playerId: "a", points: 55 },
+      { stageId: "e1", playerId: "b", points: 28 },
+      { stageId: "e1", playerId: "c", points: 28 },
+      { stageId: "e1", playerId: "d", points: 5 },
+      { stageId: "e1", playerId: "e", points: 5 },
+      // Outra etapa não interfere na contagem da primeira.
+      { stageId: "e2", playerId: "a", points: 5 },
+    ]);
+    expect(colocacoes.map((r) => r.placement)).toEqual([1, 2, 2, 4, 4, 1]);
+  });
+
+  it("colocação registrada abaixo do corte vence a dedução", () => {
+    // A liga anotou a ordem real do fundo da mesa: 22º não vira 3º só porque
+    // apenas duas pessoas pontuaram mais naquela etapa.
+    const colocacoes = derivePlacements([
+      { stageId: "e1", playerId: "a", points: 55, placement: 1 },
+      { stageId: "e1", playerId: "b", points: 48, placement: 2 },
+      { stageId: "e1", playerId: "c", points: 5, placement: 22 },
+      { stageId: "e1", playerId: "d", points: 5, placement: null },
+    ]);
+    expect(colocacoes.map((r) => r.placement)).toEqual([1, 2, 22, 3]);
   });
 
   it("conta etapas sem valor gasto informado, sem somar zero no total pago", () => {
@@ -218,8 +261,8 @@ describe("melhor colocação e quantas vezes a atingiu", () => {
     expect(ana.bestPlacementCount).toBe(2);
   });
 
-  it("sem colocação registrada, não há melhor colocação", () => {
-    const [ana] = buildRanking([player("a", "Ana")], [entry("e1", "a", null, 5)]);
+  it("quem não jogou nenhuma etapa não tem melhor colocação", () => {
+    const [ana] = buildRanking([player("a", "Ana")], []);
     expect(ana.bestPlacement).toBeNull();
     expect(ana.bestPlacementCount).toBe(0);
   });
@@ -259,7 +302,7 @@ describe("critério de desempate", () => {
 
   it("último critério é o nome, para a ordem nunca ser aleatória", () => {
     const players = [player("z", "Zeca"), player("a", "Ana")];
-    const entries = [entry("e1", "a", null, 5), entry("e1", "z", null, 5)];
+    const entries = [entry("e1", "a", 1, 5), entry("e1", "z", 1, 5)];
 
     const ranking = buildRanking(players, entries);
     expect(ranking.map((r) => r.player.fullName)).toEqual(["Ana", "Zeca"]);
@@ -273,10 +316,10 @@ describe("critério de desempate", () => {
 
     const entries: RankingEntry[] = [];
     rodolfo.forEach((p, i) => {
-      if (p > 0) entries.push(entry(`e${i}`, "rodolfo", p === 5 ? null : placementOf(p), p));
+      if (p > 0) entries.push(entry(`e${i}`, "rodolfo", placementOf(p) ?? 16, p));
     });
     rodrigo.forEach((p, i) => {
-      if (p > 0) entries.push(entry(`e${i}`, "rodrigo", p === 5 ? null : placementOf(p), p));
+      if (p > 0) entries.push(entry(`e${i}`, "rodrigo", placementOf(p) ?? 16, p));
     });
 
     const ranking = buildRanking(players, entries);
