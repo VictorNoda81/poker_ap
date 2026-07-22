@@ -20,6 +20,15 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
   },
   icons: {
+    // `icon` PRECISA estar aqui. Declarar o campo `icons` desliga a convenção
+    // de arquivo do Next (app/icon.png), então sem esta linha o HTML saía com
+    // apple-touch-icon e mais nada — e a aba do browser ficava sem ícone.
+    // Dois tamanhos: 128 para a aba, 192 para atalho de desktop e favoritos.
+    icon: [
+      { url: "/icon.png", sizes: "128x128", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    shortcut: "/icon.png",
     apple: "/icons/apple-touch-icon.png",
   },
   formatDetection: {
