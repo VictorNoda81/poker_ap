@@ -32,6 +32,7 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { parseRankingWorkbook, playerKey, type ParsedRanking } from "../lib/import/parse-ranking";
+import { CUTOFF_PLACEMENT } from "../lib/domain/scoring";
 import { normalizeSupabaseUrl } from "../lib/supabase/url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -208,13 +209,19 @@ async function seedEntries(
   // scripts de preenchimento.
   const jaLancado = new Map<
     string,
-    { amount_paid: unknown; prize_amount: unknown; rebuys: unknown; had_addon: unknown }
+    {
+      amount_paid: unknown;
+      prize_amount: unknown;
+      rebuys: unknown;
+      had_addon: unknown;
+      placement: number | null;
+    }
   >();
   const ids = [...stageIds.values()];
   if (ids.length > 0) {
     const { data } = await db
       .from("stage_entries")
-      .select("stage_id, player_id, amount_paid, prize_amount, rebuys, had_addon")
+      .select("stage_id, player_id, amount_paid, prize_amount, rebuys, had_addon, placement")
       .in("stage_id", ids);
     for (const row of data ?? []) {
       jaLancado.set(`${row.stage_id}#${row.player_id}`, {
@@ -222,6 +229,7 @@ async function seedEntries(
         prize_amount: row.prize_amount,
         rebuys: row.rebuys,
         had_addon: row.had_addon,
+        placement: (row.placement as number | null) ?? null,
       });
     }
   }
@@ -237,7 +245,13 @@ async function seedEntries(
     return {
       stage_id: stageId,
       player_id: playerId,
-      placement: result.placement,
+      // Colocação abaixo do corte é conhecimento que a planilha NÃO tem: lá
+      // todo mundo com 5 pontos fica sem posição. Se alguém digitou 17º, 22º…
+      // no painel, veio de quem viu a mesa e o seed não pode apagar.
+      placement:
+        anterior && anterior.placement !== null && anterior.placement >= CUTOFF_PLACEMENT
+          ? anterior.placement
+          : result.placement,
       points: result.points,
       amount_paid: anterior?.amount_paid ?? null,
       prize_amount: anterior?.prize_amount ?? 0,
