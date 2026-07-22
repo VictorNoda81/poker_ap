@@ -97,7 +97,7 @@ export default async function TemporadasPage() {
               </div>
               <div>
                 <dt className="text-[0.6rem] uppercase tracking-wider text-chalk-dim">
-                  Pote da Final
+                  Pote da Etapa Final
                 </dt>
                 <dd className="tnum mt-1 text-sm font-bold text-gold">{formatBRL(reserva)}</dd>
               </div>

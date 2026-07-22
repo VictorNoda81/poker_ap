@@ -27,8 +27,9 @@ export function SiteHeader() {
 
       <div className="border-b border-black/10 bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          {/* No celular: logo em cima, menu embaixo. No desktop: lado a lado. */}
-          <div className="flex flex-col gap-1 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:py-3">
+          {/* No celular: logo e menu centralizados, um sobre o outro.
+              No desktop: logo à esquerda, menu à direita. */}
+          <div className="flex flex-col items-center gap-1.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:py-3">
             <Link
               href="/"
               className="flex shrink-0 items-center gap-3 sm:gap-4"
@@ -57,9 +58,9 @@ export function SiteHeader() {
 
             <nav
               aria-label="Navegação principal"
-              className="-mx-1 overflow-x-auto sm:mx-0 sm:overflow-visible"
+              className="w-full overflow-x-auto sm:w-auto sm:overflow-visible"
             >
-              <ul className="flex min-w-max items-center gap-1 px-1 text-sm font-semibold">
+              <ul className="flex min-w-max items-center justify-center gap-1 text-sm font-semibold sm:justify-end">
                 {NAV.map((item) => (
                   <li key={item.href}>
                     <Link

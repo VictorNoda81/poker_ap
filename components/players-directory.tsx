@@ -12,13 +12,15 @@ function normalize(text: string): string {
   return text.normalize("NFD").replace(DIACRITICS, "").toLowerCase();
 }
 
-type Order = "nome" | "pontos" | "media" | "classificacao";
+type Order = "nome" | "pontos" | "media" | "classificacao" | "vitorias" | "melhor";
 
 const ORDER_LABELS: Record<Order, string> = {
   nome: "Nome",
   pontos: "Pontos",
   media: "Média pts",
   classificacao: "Class. média",
+  vitorias: "Vitórias",
+  melhor: "Melhor col.",
 };
 
 interface Aggregate {
@@ -30,6 +32,11 @@ interface Aggregate {
   balance: number;
   seasonsPlayed: number;
   bestPosition: number | null;
+  /** Melhor colocação numa ETAPA e quantas vezes a atingiu. */
+  bestStagePlacement: number | null;
+  bestStagePlacementCount: number;
+  /** Temporadas em que foi campeão (só conta temporada encerrada). */
+  championSeasons: number[];
   /** Pontos por etapa jogada, no conjunto de temporadas selecionado. */
   avgPoints: number;
   /** Colocação média por etapa com posição registrada. null se nenhuma. */
@@ -53,6 +60,9 @@ function aggregate(player: PlayerAcrossSeasons, years: Set<number>): Aggregate {
     balance: 0,
     seasonsPlayed: 0,
     bestPosition: null,
+    bestStagePlacement: null,
+    bestStagePlacementCount: 0,
+    championSeasons: [],
     avgPoints: 0,
     avgPlacement: null,
   };
@@ -70,6 +80,18 @@ function aggregate(player: PlayerAcrossSeasons, years: Set<number>): Aggregate {
       agg.bestPosition === null ? stat.position : Math.min(agg.bestPosition, stat.position);
     placementSum += stat.placementSum;
     placedStages += stat.placedStages;
+
+    if (stat.isChampion) agg.championSeasons.push(stat.year);
+
+    // Melhor colocação numa etapa: guarda a menor e soma as repetições dela.
+    if (stat.bestPlacement !== null) {
+      if (agg.bestStagePlacement === null || stat.bestPlacement < agg.bestStagePlacement) {
+        agg.bestStagePlacement = stat.bestPlacement;
+        agg.bestStagePlacementCount = stat.bestPlacementCount;
+      } else if (stat.bestPlacement === agg.bestStagePlacement) {
+        agg.bestStagePlacementCount += stat.bestPlacementCount;
+      }
+    }
   }
   agg.balance = agg.totalReceived - agg.totalPaid;
   agg.avgPoints = agg.stagesPlayed > 0 ? agg.points / agg.stagesPlayed : 0;
@@ -96,7 +118,7 @@ export function PlayersDirectory({
   const anos = useMemo(() => seasons.map((s) => s.year).sort((a, b) => b - a), [seasons]);
 
   const [query, setQuery] = useState("");
-  const [order, setOrder] = useState<Order>("pontos");
+  const [order, setOrder] = useState<Order>("nome");
   // Começa com todas as temporadas selecionadas (histórico completo).
   const [selected, setSelected] = useState<Set<number>>(() => new Set(anos));
 
@@ -139,6 +161,18 @@ export function PlayersDirectory({
             const av = a.agg.avgPlacement ?? Number.POSITIVE_INFINITY;
             const bv = b.agg.avgPlacement ?? Number.POSITIVE_INFINITY;
             return av - bv || porNome(a, b);
+          }
+          case "vitorias":
+            return b.agg.wins - a.agg.wins || porNome(a, b);
+          case "melhor": {
+            // Melhor colocação numa etapa; empate desempata por quem repetiu mais.
+            const av = a.agg.bestStagePlacement ?? Number.POSITIVE_INFINITY;
+            const bv = b.agg.bestStagePlacement ?? Number.POSITIVE_INFINITY;
+            return (
+              av - bv ||
+              b.agg.bestStagePlacementCount - a.agg.bestStagePlacementCount ||
+              porNome(a, b)
+            );
           }
           default: // pontos
             return b.agg.points - a.agg.points || porNome(a, b);
@@ -200,7 +234,9 @@ export function PlayersDirectory({
 
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-chalk-dim">Ordenar por</span>
-          {(["pontos", "media", "classificacao", "nome"] as Order[]).map((value) => (
+          {(
+            ["nome", "pontos", "media", "classificacao", "vitorias", "melhor"] as Order[]
+          ).map((value) => (
             <button
               key={value}
               type="button"
@@ -238,8 +274,23 @@ export function PlayersDirectory({
                   className="card flex h-full flex-col gap-2 p-4 transition-colors hover:border-cap-red/40"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold leading-tight text-chalk">
-                      {player.player.fullName}
+                    <span className="flex min-w-0 items-center gap-1.5 font-semibold leading-tight text-chalk">
+                      <span className="truncate">{player.player.fullName}</span>
+                      {/* Estrela = já foi campeão de alguma temporada encerrada. */}
+                      {agg.championSeasons.length > 0 ? (
+                        <span
+                          title={`Campeão da temporada ${agg.championSeasons.sort().join(", ")}`}
+                          aria-label={`Campeão em ${agg.championSeasons.sort().join(", ")}`}
+                          className="shrink-0 text-gold-bright"
+                        >
+                          ★
+                          {agg.championSeasons.length > 1 ? (
+                            <span className="tnum text-[0.65rem] font-bold">
+                              {agg.championSeasons.length}
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : null}
                     </span>
                     {/* Colocação só faz sentido quando UMA temporada está selecionada. */}
                     {umAnoSo && agg.bestPosition !== null ? (
@@ -322,6 +373,39 @@ export function PlayersDirectory({
                       </dt>
                       <dd className="tnum mt-0.5 text-sm font-bold text-chalk">
                         {agg.avgPlacement === null ? "—" : `${formatNumber(agg.avgPlacement, 1)}º`}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  {/* Conquistas em etapas. */}
+                  <dl className="grid grid-cols-2 gap-2 border-t border-white/5 pt-3 text-center">
+                    <div>
+                      <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">
+                        Etapas vencidas
+                      </dt>
+                      <dd
+                        className={`tnum mt-0.5 text-sm font-bold ${
+                          agg.wins > 0 ? "text-gold-bright" : "text-chalk-dim"
+                        }`}
+                      >
+                        {agg.wins || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">
+                        Melhor colocação
+                      </dt>
+                      <dd className="tnum mt-0.5 text-sm font-bold text-chalk">
+                        {agg.bestStagePlacement === null ? (
+                          "—"
+                        ) : (
+                          <>
+                            {agg.bestStagePlacement}º
+                            {agg.bestStagePlacementCount > 1 ? (
+                              <span className="text-chalk-dim"> ×{agg.bestStagePlacementCount}</span>
+                            ) : null}
+                          </>
+                        )}
                       </dd>
                     </div>
                   </dl>

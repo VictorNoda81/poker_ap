@@ -7,6 +7,7 @@
  * roda em produção é o que os testes verificam contra a planilha real.
  */
 
+import { round2 } from "@/lib/domain/money";
 import { computeReserve, type PrizeSettings } from "@/lib/domain/prizes";
 import {
   buildRanking,
@@ -58,8 +59,16 @@ export interface StageSummary {
   /** true quando a arrecadação veio de `gross_amount_override`, não do detalhe por jogador. */
   grossIsManual: boolean;
   reserve: number;
-  /** Soma dos prêmios efetivamente pagos nesta etapa. */
+  /**
+   * Prêmios da etapa. Quando ninguém teve prêmio lançado individualmente (é o
+   * caso de todo o histórico importado das planilhas), vale a diferença entre a
+   * arrecadação e a reserva da Etapa Final — que foi, de fato, o que a mesa
+   * distribuiu. `prizesEstimated` diz qual dos dois está em uso.
+   */
   prizesPaid: number;
+  prizesEstimated: boolean;
+  /** Soma dos prêmios efetivamente lançados por jogador (0 se nenhum). */
+  prizesRecorded: number;
   participantCount: number;
   /** Participantes cuja despesa ainda não foi lançada. */
   missingFinancials: number;
@@ -198,6 +207,14 @@ export async function getSeasonBundle(season: SeasonRow): Promise<SeasonBundle> 
     // O valor informado manualmente tem precedência: é o caso das etapas
     // importadas da planilha, onde só o total do pote é conhecido.
     const gross = override ?? sumPaid;
+    const reserve = row.is_final ? 0 : computeReserve(gross, settings.finalReservePct);
+    const prizesRecorded = stageEntries.reduce(
+      (sum, e) => sum + toNumberOr(e.prize_amount, 0),
+      0,
+    );
+    // Sem prêmio lançado por jogador, o que a mesa distribuiu foi a arrecadação
+    // menos a reserva da Etapa Final.
+    const prizesEstimated = prizesRecorded === 0 && gross > 0;
 
     return {
       id: row.id,
@@ -209,8 +226,10 @@ export async function getSeasonBundle(season: SeasonRow): Promise<SeasonBundle> 
       gross,
       grossIsManual: override !== null,
       // A Etapa Final não separa reserva nova — ela distribui o acumulado.
-      reserve: row.is_final ? 0 : computeReserve(gross, settings.finalReservePct),
-      prizesPaid: stageEntries.reduce((sum, e) => sum + toNumberOr(e.prize_amount, 0), 0),
+      reserve,
+      prizesPaid: prizesEstimated ? round2(gross - reserve) : prizesRecorded,
+      prizesEstimated,
+      prizesRecorded,
       participantCount: stageEntries.length,
       missingFinancials: stageEntries.filter((e) => toNumber(e.amount_paid) === null).length,
       needsReviewCount: stageEntries.filter((e) => e.needs_review).length,
@@ -239,7 +258,13 @@ export async function getSeasonBundle(season: SeasonRow): Promise<SeasonBundle> 
 
 export interface StageEntryDetail {
   player: RankingPlayer;
+  /** Colocação registrada. null quando a planilha só marcou "16º ou pior". */
   placement: number | null;
+  /**
+   * Colocação real na etapa, derivada da pontuação: quem empata em pontos
+   * divide a mesma colocação. Preenche o buraco de quem entrou como "16º+".
+   */
+  displayPlacement: number;
   points: number;
   amountPaid: number | null;
   prizeAmount: number;
@@ -289,7 +314,9 @@ export async function getStageDetail(stageId: string): Promise<StageDetail | nul
 
   const playersById = new Map(bundle.players.map((p) => [p.id, p]));
 
-  const entries: StageEntryDetail[] = ((entryRows ?? []) as StageEntryRow[])
+  const rows = (entryRows ?? []) as StageEntryRow[];
+
+  const entries: StageEntryDetail[] = rows
     .map((row) => ({
       player: playersById.get(row.player_id) ?? {
         id: row.player_id,
@@ -299,6 +326,8 @@ export async function getStageDetail(stageId: string): Promise<StageDetail | nul
         invitedByName: null,
       },
       placement: row.placement,
+      // Quantos fizeram MAIS pontos + 1: empate em pontos = mesma colocação.
+      displayPlacement: rows.filter((other) => other.points > row.points).length + 1,
       points: row.points,
       amountPaid: toNumber(row.amount_paid),
       prizeAmount: toNumberOr(row.prize_amount, 0),
@@ -312,12 +341,9 @@ export async function getStageDetail(stageId: string): Promise<StageDetail | nul
   return { stage: summary, season: bundle.season, settings: bundle.settings, entries };
 }
 
-/** Ordena o resultado da etapa: colocados primeiro, depois por pontos e nome. */
+/** Ordena o resultado da etapa pela colocação real; empate resolve por nome. */
 export function compareStageEntries(a: StageEntryDetail, b: StageEntryDetail): number {
-  const aPlace = a.placement ?? Number.POSITIVE_INFINITY;
-  const bPlace = b.placement ?? Number.POSITIVE_INFINITY;
-  if (aPlace !== bPlace) return aPlace - bPlace;
-  if (b.points !== a.points) return b.points - a.points;
+  if (a.displayPlacement !== b.displayPlacement) return a.displayPlacement - b.displayPlacement;
   return a.player.fullName.localeCompare(b.player.fullName, "pt-BR");
 }
 
@@ -466,7 +492,11 @@ export interface PlayerSeasonStat {
    *  reagregar as médias quando o usuário seleciona várias temporadas. */
   placementSum: number;
   placedStages: number;
+  /** Melhor colocação numa ETAPA e quantas vezes a atingiu. */
   bestPlacement: number | null;
+  bestPlacementCount: number;
+  /** true se terminou em 1º numa temporada JÁ ENCERRADA (campeão de verdade). */
+  isChampion: boolean;
 }
 
 export interface PlayerAcrossSeasons {
@@ -502,6 +532,9 @@ export async function getPlayersAcrossSeasons(): Promise<{
   };
 
   for (const { season, bundle } of bundles) {
+    // Só há campeão em temporada encerrada; na que está correndo há líder.
+    const encerrada = !bundle.stages.some((s) => s.status === "scheduled");
+
     for (const row of bundle.ranking) {
       // Garante que todo jogador cadastrado apareça, mesmo sem participação —
       // mas só registra o ano quando ele jogou.
@@ -521,6 +554,8 @@ export async function getPlayersAcrossSeasons(): Promise<{
         placementSum: row.placementSum,
         placedStages: row.placedStages,
         bestPlacement: row.bestPlacement,
+        bestPlacementCount: row.bestPlacementCount,
+        isChampion: encerrada && row.displayPosition === 1,
       };
     }
   }

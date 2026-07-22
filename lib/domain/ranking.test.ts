@@ -104,6 +104,64 @@ describe("buildRanking", () => {
   });
 });
 
+describe("displayPosition — colocação exibida com empates", () => {
+  it("mesma pontuação = mesma colocação, e a seguinte pula (1, 2, 2, 4)", () => {
+    const players = [player("a", "Ana"), player("b", "Bruno"), player("c", "Célia"), player("d", "Davi")];
+    const entries = [
+      entry("e1", "a", 1, 55),
+      entry("e1", "b", 2, 48),
+      entry("e2", "c", 2, 48),
+      entry("e1", "d", 5, 33),
+    ];
+
+    const ranking = buildRanking(players, entries);
+    const porNome = new Map(ranking.map((r) => [r.player.fullName, r]));
+
+    expect(porNome.get("Ana")!.displayPosition).toBe(1);
+    expect(porNome.get("Bruno")!.displayPosition).toBe(2);
+    expect(porNome.get("Célia")!.displayPosition).toBe(2); // empatada com Bruno
+    expect(porNome.get("Davi")!.displayPosition).toBe(4); // pula o 3º
+  });
+
+  it("a ordem da lista continua única, mesmo com colocação repetida", () => {
+    const players = [player("a", "Ana"), player("b", "Bruno")];
+    const entries = [entry("e1", "a", 2, 48), entry("e2", "b", 2, 48)];
+
+    const ranking = buildRanking(players, entries);
+    expect(ranking.map((r) => r.position)).toEqual([1, 2]);
+    expect(ranking.map((r) => r.displayPosition)).toEqual([1, 1]);
+  });
+
+  it("quem não jogou fica sem colocação exibida", () => {
+    const ranking = buildRanking([player("a", "Ana"), player("z", "Zeca")], [
+      entry("e1", "a", 1, 55),
+    ]);
+    expect(ranking[1].stagesPlayed).toBe(0);
+    expect(ranking[1].displayPosition).toBe(0);
+  });
+});
+
+describe("melhor colocação e quantas vezes a atingiu", () => {
+  it("conta as repetições da melhor colocação", () => {
+    const players = [player("a", "Ana")];
+    const entries = [
+      entry("e1", "a", 3, 43),
+      entry("e2", "a", 3, 43),
+      entry("e3", "a", 7, 23),
+    ];
+
+    const [ana] = buildRanking(players, entries);
+    expect(ana.bestPlacement).toBe(3);
+    expect(ana.bestPlacementCount).toBe(2);
+  });
+
+  it("sem colocação registrada, não há melhor colocação", () => {
+    const [ana] = buildRanking([player("a", "Ana")], [entry("e1", "a", null, 5)]);
+    expect(ana.bestPlacement).toBeNull();
+    expect(ana.bestPlacementCount).toBe(0);
+  });
+});
+
 describe("critério de desempate", () => {
   it("empate em pontos: vence quem tem mais etapas ganhas", () => {
     const players = [player("a", "Ana"), player("b", "Bruno")];

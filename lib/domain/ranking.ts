@@ -40,7 +40,13 @@ export interface RankingEntry {
 }
 
 export interface RankingRow {
+  /** Ordem na lista (1..N, sempre única — usada para o pódio e a ordenação). */
   position: number;
+  /**
+   * Colocação EXIBIDA: quem tem a mesma pontuação divide a mesma colocação
+   * (1, 2, 2, 4...). É o que a liga considera a classificação real.
+   */
+  displayPosition: number;
   player: RankingPlayer;
   totalPoints: number;
   stagesPlayed: number;
@@ -57,6 +63,8 @@ export interface RankingRow {
   placedStages: number;
   /** Melhor colocação da temporada (menor número). null se nenhuma registrada. */
   bestPlacement: number | null;
+  /** Quantas vezes o jogador atingiu essa melhor colocação. */
+  bestPlacementCount: number;
   wins: number;
   seconds: number;
   thirds: number;
@@ -118,9 +126,15 @@ export function buildRanking(
     }
 
     const stagesPlayed = playerEntries.length;
+    // Quantas vezes repetiu a melhor colocação (ex.: "3º lugar, 4 vezes").
+    const bestPlacementCount =
+      bestPlacement === null
+        ? 0
+        : playerEntries.filter((e) => e.placement === bestPlacement).length;
 
     return {
       position: 0, // preenchido após a ordenação
+      displayPosition: 0, // idem
       player,
       totalPoints,
       stagesPlayed,
@@ -132,6 +146,7 @@ export function buildRanking(
       placementSum,
       placedStages: placementCount,
       bestPlacement,
+      bestPlacementCount,
       wins,
       seconds,
       thirds,
@@ -142,6 +157,13 @@ export function buildRanking(
   rows.sort(compareRankingRows);
   rows.forEach((row, index) => {
     row.position = index + 1;
+    // Colocação exibida: mesma pontuação = mesma colocação (1, 2, 2, 4...).
+    // Quem não jogou fica fora dessa conta.
+    row.displayPosition =
+      row.stagesPlayed === 0
+        ? 0
+        : rows.filter((other) => other.stagesPlayed > 0 && other.totalPoints > row.totalPoints)
+            .length + 1;
   });
 
   return rows;
