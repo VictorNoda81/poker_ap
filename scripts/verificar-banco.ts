@@ -52,14 +52,24 @@ async function main() {
     conferir("Etapas", bundle.stages.length, planilha.stages.length);
     conferir("Participações", bundle.totals.participations, planilha.results.length);
     conferir(
-      "Reserva acumulada",
-      bundle.accumulatedReserve,
-      planilha.stages.reduce((s, e) => s + (e.reserveAmount ?? 0), 0),
-    );
-    conferir(
       "Arrecadação total",
       bundle.totals.gross,
       planilha.stages.reduce((s, e) => s + (e.grossAmount ?? 0), 0),
+    );
+
+    // Cada etapa tem de fechar: arrecadação = custos + reserva + prêmios.
+    const custos = bundle.stages.reduce((s, e) => s + e.deductions, 0);
+    conferir(
+      "Custos + reserva + prêmios",
+      Math.round((custos + bundle.accumulatedReserve + bundle.totals.prizesPaid) * 100) / 100,
+      bundle.totals.gross,
+    );
+
+    // A reserva NÃO bate mais com a linha "10% do pote" das planilhas: a regra
+    // mudou (taxa por jogador e prêmio do 5º saem antes dos 10%).
+    const reservaAntiga = planilha.stages.reduce((s, e) => s + (e.reserveAmount ?? 0), 0);
+    console.log(
+      `  · reserva: ${reservaAntiga} (regra antiga) → ${bundle.accumulatedReserve} (regra atual)`,
     );
 
     // Pontos por jogador: compara o banco com a planilha, casando por chave.
