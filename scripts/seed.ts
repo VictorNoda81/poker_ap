@@ -1,12 +1,18 @@
 /**
  * Seed das temporadas a partir das planilhas em `data/` (2023 a 2026).
  *
- *   npm run seed
+ *   npm run seed              # só mostra o que faria
+ *   npm run seed -- --apply   # grava
  *
- * É IDEMPOTENTE: pode rodar quantas vezes quiser. Usa chaves naturais (ano da
- * temporada, número da etapa, par etapa+jogador) e casa jogadores por uma chave
- * de identidade que ignora acento/apelido, então rodar de novo atualiza em vez
- * de duplicar.
+ * PRECISA de `--apply` porque ele REESCREVE pontos e colocações a partir das
+ * planilhas. Se a liga corrigiu um resultado pelo painel — e ela corrige —,
+ * rodar o seed desfaz a correção sem avisar. Já aconteceu: um seed sem querer
+ * ressuscitou uma participação apagada e devolveu três pontuações antigas.
+ *
+ * É IDEMPOTENTE em relação às planilhas: usa chaves naturais (ano da temporada,
+ * número da etapa, par etapa+jogador) e casa jogadores por uma chave de
+ * identidade que ignora acento/apelido, então rodar de novo atualiza em vez de
+ * duplicar. Idempotente NÃO quer dizer inofensivo — ver o parágrafo acima.
  *
  * Identidade de jogador entre temporadas:
  *   Os nomes variam de um ano para outro ("André"/"ANDRE", "José Olimpio (JOB)"
@@ -196,19 +202,26 @@ async function seedEntries(
   keyToId: Map<string, string>,
   stageIds: Map<number, string>,
 ): Promise<number> {
-  // Financeiro já lançado (pelo admin ou pelo preenchimento de prêmios) tem de
-  // sobreviver a um novo seed: reimportar a planilha não pode apagar dinheiro.
-  const jaLancado = new Map<string, { amount_paid: unknown; prize_amount: unknown }>();
+  // O que foi lançado depois da importação — dinheiro, re-buys e add-ons — tem
+  // de sobreviver a um novo seed: reimportar a planilha não pode apagar nada
+  // disso. A planilha só sabe pontuação; todo o resto veio do admin ou dos
+  // scripts de preenchimento.
+  const jaLancado = new Map<
+    string,
+    { amount_paid: unknown; prize_amount: unknown; rebuys: unknown; had_addon: unknown }
+  >();
   const ids = [...stageIds.values()];
   if (ids.length > 0) {
     const { data } = await db
       .from("stage_entries")
-      .select("stage_id, player_id, amount_paid, prize_amount")
+      .select("stage_id, player_id, amount_paid, prize_amount, rebuys, had_addon")
       .in("stage_id", ids);
     for (const row of data ?? []) {
       jaLancado.set(`${row.stage_id}#${row.player_id}`, {
         amount_paid: row.amount_paid,
         prize_amount: row.prize_amount,
+        rebuys: row.rebuys,
+        had_addon: row.had_addon,
       });
     }
   }
@@ -228,6 +241,8 @@ async function seedEntries(
       points: result.points,
       amount_paid: anterior?.amount_paid ?? null,
       prize_amount: anterior?.prize_amount ?? 0,
+      rebuys: anterior?.rebuys ?? null,
+      had_addon: anterior?.had_addon ?? null,
       needs_review: result.needsReview,
       review_note: result.reviewNote,
     };
@@ -245,6 +260,26 @@ async function seedEntries(
 }
 
 async function main() {
+  if (!process.argv.includes("--apply")) {
+    const temporadas = SEASONS.map((year) => ({
+      year,
+      parsed: parseRankingWorkbook(path.join(DATA, `${year}.xlsx`)),
+    }));
+    console.log("\nSIMULAÇÃO — nada será gravado. Rode com -- --apply para valer.\n");
+    for (const { year, parsed } of temporadas) {
+      console.log(
+        `  ${year}: ${parsed.players.length} jogadores · ${parsed.stages.length} etapas · ` +
+          `${parsed.results.length} participações`,
+      );
+    }
+    console.log(
+      "\n⚠ O seed grava os pontos e as colocações DAS PLANILHAS por cima do que\n" +
+        "  estiver no banco. Correções feitas no painel de admin serão desfeitas.\n" +
+        "  Confira antes com: npm run verificar:banco\n",
+    );
+    return;
+  }
+
   const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
   const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
   const db = createClient(normalizeSupabaseUrl(url), serviceKey, {

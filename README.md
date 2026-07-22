@@ -107,11 +107,16 @@ Os arquivos `data/2023.xlsx` … `data/2026.xlsx` são as planilhas originais da
 e popula o banco:
 
 ```bash
-npm run seed
+npm run seed -- --apply
 ```
 
-Ele é **idempotente** — pode rodar quantas vezes quiser, que atualiza em vez de duplicar. Ao final
-imprime um resumo por temporada:
+Sem `--apply` ele só mostra o que faria. A trava existe porque o seed **reescreve pontos e
+colocações a partir das planilhas**: se a liga corrigiu um resultado pelo painel, rodar o seed
+desfaz a correção. Antes de rodar de novo num banco em uso, cheque com `npm run verificar:banco`
+— divergência ali costuma ser uma edição legítima do admin, não um erro.
+
+Ele é **idempotente em relação às planilhas** — rodar duas vezes dá o mesmo resultado, sem
+duplicar. Ao final imprime um resumo por temporada:
 
 ```
 Jogadores distintos ... 158
