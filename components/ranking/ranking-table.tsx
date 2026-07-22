@@ -277,16 +277,23 @@ export function RankingTable({
       {/* Tabela                                                            */}
       {/* ---------------------------------------------------------------- */}
       <div className="card table-scroll">
-        <table className="w-full min-w-[64rem] table-fixed border-collapse text-sm">
+        <table className="w-full min-w-[62rem] table-fixed border-collapse text-sm">
           {/* Larguras fixas + uma coluna final sem largura: o espaço que sobra
               vai para ela, em vez de a coluna do nome esticar e afastar os
-              números. */}
+              números. As colunas de dinheiro são mais largas porque
+              "R$ 4.971,78" não pode quebrar em duas linhas. */}
           <colgroup>
             {columns.map((c) => (
               <col
                 key={c.key}
                 className={
-                  c.key === "nome" ? "w-[15rem]" : c.key === "position" ? "w-[3.5rem]" : "w-[5.5rem]"
+                  c.key === "nome"
+                    ? "w-[8rem]"
+                    : c.key === "position"
+                      ? "w-[2.75rem]"
+                      : c.financial && c.key !== "roi"
+                        ? "w-[6.75rem]"
+                        : "w-[4.5rem]"
                 }
               />
             ))}
@@ -302,7 +309,7 @@ export function RankingTable({
                     key={c.key}
                     scope="col"
                     aria-sort={active ? (asc ? "ascending" : "descending") : "none"}
-                    className={`px-2 py-2.5 font-bold ${
+                    className={`px-1.5 py-2.5 font-bold ${
                       c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""
                     }`}
                   >
@@ -336,14 +343,15 @@ export function RankingTable({
                   className="border-b border-ink-850/60 transition-colors last:border-0 hover:bg-ink-850/40"
                 >
                   <td
-                    className={`tnum px-2 py-2.5 text-base font-black ${positionClass(row.displayPosition)}`}
+                    className={`tnum px-1.5 py-2.5 text-base font-black ${positionClass(row.displayPosition)}`}
                   >
                     {row.stagesPlayed === 0 ? "—" : row.displayPosition}
                   </td>
 
-                  <td className="px-2 py-2.5">
+                  <td className="px-1.5 py-2.5">
                     <Link
                       href={`/jogadores/${row.player.id}`}
+                      title={row.player.fullName}
                       className="block truncate font-semibold text-chalk transition-colors hover:text-cap-red-light"
                     >
                       {row.player.fullName}
@@ -357,29 +365,29 @@ export function RankingTable({
                     </div>
                   </td>
 
-                  <td className="tnum px-2 py-2.5 text-right text-base font-bold text-chalk">
+                  <td className="tnum px-1.5 py-2.5 text-right text-base font-bold text-chalk">
                     {formatNumber(row.totalPoints)}
                   </td>
-                  <td className="tnum px-2 py-2.5 text-right text-chalk-dim">{row.stagesPlayed}</td>
-                  <td className="tnum px-2 py-2.5 text-right text-chalk-dim">
+                  <td className="tnum px-1.5 py-2.5 text-right text-chalk-dim">{row.stagesPlayed}</td>
+                  <td className="tnum px-1.5 py-2.5 text-right text-chalk-dim">
                     {row.stagesPlayed === 0 ? "—" : formatNumber(row.averagePoints, 1)}
                   </td>
-                  <td className="tnum px-2 py-2.5 text-right text-chalk-dim">
+                  <td className="tnum px-1.5 py-2.5 text-right text-chalk-dim">
                     {row.averagePlacement === null
                       ? "—"
                       : `${formatNumber(row.averagePlacement, 1)}º`}
                   </td>
 
-                  <td className="tnum px-2 py-2.5 text-right font-semibold text-gold-bright">
+                  <td className="tnum px-1.5 py-2.5 text-right font-semibold text-gold-bright">
                     {row.wins || "—"}
                   </td>
-                  <td className="tnum px-2 py-2.5 text-right font-semibold text-silver">
+                  <td className="tnum px-1.5 py-2.5 text-right font-semibold text-silver">
                     {row.seconds || "—"}
                   </td>
-                  <td className="tnum px-2 py-2.5 text-right font-semibold text-bronze">
+                  <td className="tnum px-1.5 py-2.5 text-right font-semibold text-bronze">
                     {row.thirds || "—"}
                   </td>
-                  <td className="tnum px-2 py-2.5 text-right text-chalk-dim">
+                  <td className="tnum px-1.5 py-2.5 text-right text-chalk-dim">
                     {row.bestPlacement === null ? (
                       "—"
                     ) : (
@@ -394,21 +402,21 @@ export function RankingTable({
 
                   {showFinancials ? (
                     <>
-                      <td className="tnum px-2 py-2.5 text-right text-chalk-dim">
+                      <td className="tnum whitespace-nowrap px-1.5 py-2.5 text-right text-chalk-dim">
                         {semGasto ? "—" : formatBRL(row.totalPaid)}
                       </td>
-                      <td className="tnum px-2 py-2.5 text-right text-chalk-dim">
+                      <td className="tnum whitespace-nowrap px-1.5 py-2.5 text-right text-chalk-dim">
                         {row.totalReceived === 0 ? "—" : formatBRL(row.totalReceived)}
                       </td>
                       <td
-                        className={`tnum px-2 py-2.5 text-right font-bold ${
+                        className={`tnum whitespace-nowrap px-1.5 py-2.5 text-right font-bold ${
                           semGasto ? "text-chalk-dim" : balanceClass(row.balance)
                         }`}
                       >
                         {semGasto ? "—" : formatBRLSigned(row.balance)}
                       </td>
                       <td
-                        className={`tnum px-2 py-2.5 text-right font-semibold ${
+                        className={`tnum px-1.5 py-2.5 text-right font-semibold ${
                           roi === null
                             ? "text-chalk-dim"
                             : roi >= 1

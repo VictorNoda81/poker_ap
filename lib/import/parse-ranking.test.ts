@@ -110,12 +110,20 @@ describe.each([
 });
 
 describe("anomalias conhecidas das planilhas viram revisão", () => {
-  it("2023: os 42 pontos de Alexandre Max (typo de 43) são marcados", () => {
+  it("2023: os 42 pontos de Alexandre Max viram 43 (typo confirmado pela liga)", () => {
     const parsed = parseRankingWorkbook(path.join(DATA, "2023.xlsx"));
-    const r = parsed.results.find((x) => x.playerName === "Alexandre Max" && x.points === 42);
-    expect(r).toBeDefined();
-    expect(r!.needsReview).toBe(true);
-    expect(r!.placement).toBeNull();
+
+    // A célula errada não sobrevive à importação.
+    expect(parsed.results.some((x) => x.points === 42)).toBe(false);
+
+    // Ele passa a ser o 3º da etapa 10, com os 43 pontos da tabela.
+    const r = parsed.results.find((x) => x.playerName === "Alexandre Max" && x.stageNumber === 10);
+    expect(r?.points).toBe(43);
+    expect(r?.placement).toBe(3);
+    expect(r?.needsReview).toBe(false);
+
+    // E o total dele sobe de 172 para 173.
+    expect(parsed.spreadsheetTotals.get("Alexandre Max")).toBe(173);
   });
 
   it("2024: os pontos fora da tabela (16 e 10) são marcados", () => {

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { SuitsRow } from "./brand/icons";
+import { ClubIcon, DiamondIcon, HeartIcon, SpadeIcon } from "./brand/icons";
 
 const NAV = [
   { href: "/", label: "Ranking" },
@@ -77,12 +77,20 @@ export function SiteHeader() {
         </div>
       </div>
 
-      {/* Faixa escura de transição, com os naipes como ornamento. */}
+      {/* Faixa escura de transição: nome do clube ao centro, ladeado por dois
+          naipes de cada lado. */}
       <div className="border-b border-white/5 bg-ink-950/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-1.5 sm:px-6">
-          <SuitsRow className="text-chalk-dim/50" />
+        <div className="mx-auto flex max-w-7xl items-center justify-center gap-2.5 px-4 py-1.5 sm:px-6">
+          <span className="inline-flex items-center gap-1.5 text-chalk-dim/50" aria-hidden="true">
+            <SpadeIcon className="h-3 w-3" />
+            <HeartIcon className="h-3 w-3 text-cap-red/70" />
+          </span>
           <span className="text-[0.6rem] font-semibold uppercase tracking-[0.2em] text-chalk-dim/60">
             Clube Alto dos Pinheiros
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-chalk-dim/50" aria-hidden="true">
+            <ClubIcon className="h-3 w-3" />
+            <DiamondIcon className="h-3 w-3 text-cap-red/70" />
           </span>
         </div>
       </div>

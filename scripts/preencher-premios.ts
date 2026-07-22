@@ -31,6 +31,8 @@ loadEnv({ path: path.join(ROOT, ".env.local") });
 loadEnv({ path: path.join(ROOT, ".env") });
 
 const APPLY = process.argv.includes("--apply");
+/** Zera a premiação da temporada, para anos cuja regra de divisão era outra. */
+const LIMPAR = process.argv.includes("--limpar");
 const ANO = Number(
   process.argv.find((a) => a.startsWith("--ano="))?.split("=")[1] ?? "2026",
 );
@@ -72,6 +74,44 @@ async function main() {
     addon: Number(cfg?.addon ?? 150),
     adminFeePerPlayer: Number(cfg?.admin_fee_per_player ?? 60),
   };
+
+  // --limpar: zera a premiação da temporada inteira. Serve para os anos em que
+  // a divisão era diferente da atual — preencher com a regra de hoje inventaria
+  // valores que a liga não pagou.
+  if (LIMPAR) {
+    const { data: todasEtapas } = await db.from("stages").select("id").eq("season_id", season.id);
+    const ids = (todasEtapas ?? []).map((s) => s.id as string);
+    if (ids.length === 0) {
+      console.log(`\n${season.name}: sem etapas.\n`);
+      return;
+    }
+
+    const { count: antes } = await db
+      .from("stage_entries")
+      .select("*", { count: "exact" })
+      .in("stage_id", ids)
+      .gt("prize_amount", 0);
+
+    if (!APPLY) {
+      console.log(
+        `\nSIMULAÇÃO: ${antes ?? 0} prêmios de ${season.name} seriam zerados.` +
+          " Rode com -- --apply.\n",
+      );
+      return;
+    }
+
+    const { error } = await db
+      .from("stage_entries")
+      .update({ prize_amount: 0 })
+      .in("stage_id", ids)
+      .gt("prize_amount", 0);
+    if (error) {
+      console.error(`✖ ${error.message}`);
+      process.exit(1);
+    }
+    console.log(`\n✓ ${antes ?? 0} prêmios de ${season.name} zerados.\n`);
+    return;
+  }
 
   const { data: stages } = await db
     .from("stages")

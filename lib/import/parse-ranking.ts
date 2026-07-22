@@ -46,6 +46,32 @@ const MAX_DATE_SERIAL = 60_000;
 const DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
 
 /**
+ * Erros de digitação das planilhas, confirmados pelo dono da liga.
+ *
+ * Ficam aqui, e não só no banco, para que um novo seed não traga o valor
+ * errado de volta: a planilha é a fonte, mas estas células estão sabidamente
+ * erradas. `de` existe para a correção falhar em silêncio se a planilha for
+ * consertada na origem (aí o valor já não bate e nada é trocado).
+ */
+const CORRECOES_DE_PONTOS: {
+  ano: number;
+  etapa: number;
+  jogador: string;
+  de: number;
+  para: number;
+  motivo: string;
+}[] = [
+  {
+    ano: 2023,
+    etapa: 10,
+    jogador: "Alexandre Max",
+    de: 42,
+    para: 43,
+    motivo: "42 não existe na tabela; ele foi o 3º lugar, que vale 43",
+  },
+];
+
+/**
  * Apelidos confirmados pelo dono da liga como a mesma pessoa de um nome
  * completo. A chave é o apelido puro (já normalizado); o valor é a chave do
  * nome completo. Sem isto, "Wawa" (2025-26) e "Wagner (Wawa)" (2023-24) ficariam
@@ -238,6 +264,9 @@ export function parseRankingWorkbook(fileOrBuffer: string | Buffer): ParsedRanki
   }
   if (stages.length === 0) throw new Error("Nenhuma etapa encontrada na linha de datas.");
 
+  // O ano sai da primeira etapa — é o que identifica as correções aplicáveis.
+  const ano = Number(stages[0].date.slice(0, 4));
+
   // --- Linha dos 10%: localizada pelo rótulo, não por número fixo. ---------
   let potRow: number | null = null;
   for (let row = FIRST_PLAYER_ROW; row <= 300; row += 1) {
@@ -283,9 +312,15 @@ export function parseRankingWorkbook(fileOrBuffer: string | Buffer): ParsedRanki
 
     let total = 0;
     for (const stage of stages) {
-      const points = numberAt(sheet, `${stage.column}${row}`);
+      const lido = numberAt(sheet, `${stage.column}${row}`);
       // Vazio ou zero = não participou desta etapa.
-      if (points === null || points === 0) continue;
+      if (lido === null || lido === 0) continue;
+
+      // Correção de digitação confirmada, se houver para esta célula.
+      const correcao = CORRECOES_DE_PONTOS.find(
+        (c) => c.ano === ano && c.etapa === stage.number && c.jogador === name && c.de === lido,
+      );
+      const points = correcao ? correcao.para : lido;
 
       total += points;
 
