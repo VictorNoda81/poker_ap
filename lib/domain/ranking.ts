@@ -43,9 +43,9 @@ export interface RankingRow {
   /** Ordem na lista (1..N, sempre única — usada para o pódio e a ordenação). */
   position: number;
   /**
-   * Colocação EXIBIDA: quem tem a mesma pontuação divide a mesma colocação e a
-   * seguinte NÃO pula — 1, 2, 2, 3 (e não 1, 2, 2, 4). Ou seja, a colocação
-   * conta "níveis de pontuação", que é como a liga lê a classificação.
+   * Colocação EXIBIDA: quem tem a mesma pontuação divide a mesma colocação, e a
+   * seguinte PULA as posições ocupadas pelo empate — 1, 2, 2, 4 (padrão
+   * esportivo). Com três empatados em 2º fica 1, 2, 2, 2, 5.
    */
   displayPosition: number;
   player: RankingPlayer;
@@ -157,18 +157,16 @@ export function buildRanking(
 
   rows.sort(compareRankingRows);
 
-  // Colocação exibida: conta NÍVEIS de pontuação distintos, não jogadores.
-  // Assim dois empatados em 1º são seguidos por um 2º (e não por um 3º).
-  const niveis = [
-    ...new Set(rows.filter((r) => r.stagesPlayed > 0).map((r) => r.totalPoints)),
-  ].sort((a, b) => b - a);
-  const colocacaoPorPontos = new Map(niveis.map((pontos, i) => [pontos, i + 1]));
-
   rows.forEach((row, index) => {
     row.position = index + 1;
-    // Quem não jogou fica fora da classificação.
+    // Colocação exibida: quantos jogadores fizeram MAIS pontos, + 1. Empate
+    // divide a colocação e a seguinte pula (1, 2, 2, 4). Quem não jogou fica
+    // fora da classificação.
     row.displayPosition =
-      row.stagesPlayed === 0 ? 0 : (colocacaoPorPontos.get(row.totalPoints) ?? 0);
+      row.stagesPlayed === 0
+        ? 0
+        : rows.filter((other) => other.stagesPlayed > 0 && other.totalPoints > row.totalPoints)
+            .length + 1;
   });
 
   return rows;
