@@ -19,7 +19,7 @@ function label(place: 1 | 2 | 3, inProgress: boolean): string {
 }
 
 function PodiumCard({ row, inProgress }: { row: RankingRow; inProgress: boolean }) {
-  const place = row.position as 1 | 2 | 3;
+  const place = row.displayPosition as 1 | 2 | 3;
   const style = PODIUM_STYLE[place];
   const semFinanceiro = row.totalPaid === 0 && row.totalReceived === 0;
 
@@ -63,15 +63,18 @@ function PodiumCard({ row, inProgress }: { row: RankingRow; inProgress: boolean 
 }
 
 /**
- * Destaque dos três primeiros do ranking, em cards iguais (1-2-3 da esquerda
- * para a direita, sem o efeito de pódio escalonado que confundia a leitura).
+ * Destaque do pódio: TODOS que estão em 1º, 2º ou 3º — não só três jogadores.
+ * Havendo empate, o pódio cresce (ex.: 1º, 1º, 2º e 3º), porque cortar em três
+ * esconderia alguém que está tecnicamente no pódio.
  */
 export function Podium({ rows, inProgress }: { rows: RankingRow[]; inProgress: boolean }) {
-  const top = rows.filter((row) => row.stagesPlayed > 0).slice(0, 3);
+  const top = rows.filter(
+    (row) => row.stagesPlayed > 0 && row.displayPosition >= 1 && row.displayPosition <= 3,
+  );
   if (top.length === 0) return null;
 
   return (
-    <section aria-label="Destaques" className="mb-8 grid gap-3 sm:grid-cols-3">
+    <section aria-label="Destaques" className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {top.map((row) => (
         <PodiumCard key={row.player.id} row={row} inProgress={inProgress} />
       ))}

@@ -105,7 +105,7 @@ describe("buildRanking", () => {
 });
 
 describe("displayPosition — colocação exibida com empates", () => {
-  it("mesma pontuação = mesma colocação, e a seguinte pula (1, 2, 2, 4)", () => {
+  it("mesma pontuação = mesma colocação, e a seguinte NÃO pula (1, 2, 2, 3)", () => {
     const players = [player("a", "Ana"), player("b", "Bruno"), player("c", "Célia"), player("d", "Davi")];
     const entries = [
       entry("e1", "a", 1, 55),
@@ -120,10 +120,48 @@ describe("displayPosition — colocação exibida com empates", () => {
     expect(porNome.get("Ana")!.displayPosition).toBe(1);
     expect(porNome.get("Bruno")!.displayPosition).toBe(2);
     expect(porNome.get("Célia")!.displayPosition).toBe(2); // empatada com Bruno
-    expect(porNome.get("Davi")!.displayPosition).toBe(4); // pula o 3º
+    expect(porNome.get("Davi")!.displayPosition).toBe(3); // 3º, não 4º
   });
 
-  it("a ordem da lista continua única, mesmo com colocação repetida", () => {
+  it("empate no topo: dois 1º são seguidos por um 2º", () => {
+    const players = [player("a", "Ana"), player("b", "Bruno"), player("c", "Célia")];
+    const entries = [
+      entry("e1", "a", 1, 55),
+      entry("e2", "b", 1, 55),
+      entry("e1", "c", 2, 48),
+    ];
+
+    const ranking = buildRanking(players, entries);
+    const porNome = new Map(ranking.map((r) => [r.player.fullName, r]));
+
+    expect(porNome.get("Ana")!.displayPosition).toBe(1);
+    expect(porNome.get("Bruno")!.displayPosition).toBe(1);
+    expect(porNome.get("Célia")!.displayPosition).toBe(2);
+    // O pódio (colocação de 1 a 3) tem os três — nenhum fica de fora.
+    expect(ranking.filter((r) => r.displayPosition >= 1 && r.displayPosition <= 3)).toHaveLength(3);
+  });
+
+  it("empate no 3º lugar mantém os dois no pódio (4 jogadores)", () => {
+    const players = [
+      player("a", "Ana"),
+      player("b", "Bruno"),
+      player("c", "Célia"),
+      player("d", "Davi"),
+    ];
+    const entries = [
+      entry("e1", "a", 1, 55),
+      entry("e1", "b", 2, 48),
+      entry("e1", "c", 3, 43),
+      entry("e2", "d", 3, 43),
+    ];
+
+    const ranking = buildRanking(players, entries);
+    const noPodio = ranking.filter((r) => r.displayPosition >= 1 && r.displayPosition <= 3);
+    expect(noPodio).toHaveLength(4);
+    expect(noPodio.map((r) => r.displayPosition)).toEqual([1, 2, 3, 3]);
+  });
+
+  it("a ordem da lista continua única (position), mesmo com colocação repetida", () => {
     const players = [player("a", "Ana"), player("b", "Bruno")];
     const entries = [entry("e1", "a", 2, 48), entry("e2", "b", 2, 48)];
 
