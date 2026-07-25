@@ -244,7 +244,7 @@ export default async function JogadorPage({ params }: Params) {
                           {r.rebuys === null ? "—" : r.rebuys}
                         </td>
                         <td className="tnum px-3 py-3 text-right text-chalk-dim">
-                          {r.hadAddon === null ? "—" : r.hadAddon ? "sim" : "não"}
+                          {r.hadAddon === null ? "—" : r.hadAddon ? "Sim" : "Não"}
                         </td>
                         <td
                           className={`tnum px-3 py-3 text-right ${

@@ -241,7 +241,7 @@ export function StageResultsTable({
                     {row.rebuys === null ? "—" : row.rebuys}
                   </td>
                   <td className="tnum px-1.5 py-2.5 text-right text-chalk-dim">
-                    {row.hadAddon === null ? "—" : row.hadAddon ? "sim" : "não"}
+                    {row.hadAddon === null ? "—" : row.hadAddon ? "Sim" : "Não"}
                   </td>
                   {/* Prêmio: sempre visível — é o que o jogador ganhou. */}
                   <td
