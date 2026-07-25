@@ -140,15 +140,17 @@ const COLUMNS: Column[] = [
     lowerIsBetter: true,
     title: "Re-buys por etapa jogada",
   },
+  // Prêmio é o que o jogador GANHOU — sempre visível. Pago, Saldo e ROI revelam
+  // quanto ele gastou; ficam atrás da opção do admin (`financial`).
+  { key: "arrecadado", label: "Prêmio", align: "right" },
   { key: "pago", label: "Pago", align: "right", financial: true },
-  { key: "arrecadado", label: "Arrecadado", align: "right", financial: true },
   { key: "saldo", label: "Saldo", align: "right", financial: true },
   {
     key: "roi",
     label: "ROI",
     align: "right",
     financial: true,
-    title: "Arrecadado ÷ pago. 1,00× significa empatar.",
+    title: "Prêmio ÷ pago. 1,00× significa empatar.",
   },
 ];
 
@@ -319,7 +321,11 @@ export function RankingTable({
       {/* Tabela                                                            */}
       {/* ---------------------------------------------------------------- */}
       <div className="card table-scroll">
-        <table className="w-full min-w-[76rem] table-fixed border-collapse text-sm">
+        <table
+          className={`w-full table-fixed border-collapse text-sm ${
+            showFinancials ? "min-w-[76rem]" : "min-w-[58rem]"
+          }`}
+        >
           {/* Larguras fixas + uma coluna final sem largura: o espaço que sobra
               vai para ela, em vez de a coluna do nome esticar e afastar os
               números. As colunas de dinheiro são mais largas porque
@@ -333,7 +339,9 @@ export function RankingTable({
                     ? "w-[8rem]"
                     : c.key === "position"
                       ? "w-[2.75rem]"
-                      : c.financial && c.key !== "roi"
+                      : // Colunas em reais: largas o bastante para "R$ 4.971,78"
+                        // não quebrar em duas linhas.
+                        c.key === "arrecadado" || c.key === "pago" || c.key === "saldo"
                         ? "w-[6.75rem]"
                         : "w-[4.5rem]"
                 }
@@ -454,13 +462,15 @@ export function RankingTable({
                       : formatNumber(row.averageRebuys, 1)}
                   </td>
 
+                  {/* Prêmio: sempre visível — é o que o jogador ganhou. */}
+                  <td className="tnum whitespace-nowrap px-1.5 py-2.5 text-right font-semibold text-gold">
+                    {row.totalReceived === 0 ? "—" : formatBRL(row.totalReceived)}
+                  </td>
+
                   {showFinancials ? (
                     <>
                       <td className="tnum whitespace-nowrap px-1.5 py-2.5 text-right text-chalk-dim">
                         {semGasto ? "—" : formatBRL(row.totalPaid)}
-                      </td>
-                      <td className="tnum whitespace-nowrap px-1.5 py-2.5 text-right text-chalk-dim">
-                        {row.totalReceived === 0 ? "—" : formatBRL(row.totalReceived)}
                       </td>
                       <td
                         className={`tnum whitespace-nowrap px-1.5 py-2.5 text-right font-bold ${

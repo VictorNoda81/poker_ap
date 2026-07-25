@@ -98,6 +98,12 @@ export interface FinalInviteeRow {
   created_at: string;
 }
 
+export interface AppSettingsRow {
+  id: number;
+  show_player_finances: boolean;
+  updated_at: string;
+}
+
 /** Converte `numeric` (string) do Postgres em número. Preserva null. */
 export function toNumber(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined || value === "") return null;

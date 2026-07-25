@@ -25,6 +25,7 @@ import { getPublicClient } from "@/lib/supabase/public";
 import {
   toNumber,
   toNumberOr,
+  type AppSettingsRow,
   type PlayerRow,
   type PointsTableRow,
   type SeasonRow,
@@ -142,6 +143,27 @@ function mapSettings(row: SeasonSettingsRow | null): SeasonSettings {
     pointsBelowCutoff: row.points_below_cutoff ?? FALLBACK_SETTINGS.pointsBelowCutoff,
     finalInviteCount: row.final_invite_count ?? FALLBACK_SETTINGS.finalInviteCount,
   };
+}
+
+export interface AppSettings {
+  /** Se Pago, Saldo e ROI por jogador aparecem na área pública. */
+  showPlayerFinances: boolean;
+}
+
+export const DEFAULT_APP_SETTINGS: AppSettings = { showPlayerFinances: true };
+
+/**
+ * Preferências globais do app. Se a tabela ainda não existe (migration 0007
+ * não aplicada) ou está vazia, cai no padrão — nunca quebra a página pública.
+ */
+export async function getAppSettings(): Promise<AppSettings> {
+  const { data, error } = await getPublicClient()
+    .from("app_settings")
+    .select("show_player_finances")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error || !data) return { ...DEFAULT_APP_SETTINGS };
+  return { showPlayerFinances: (data as AppSettingsRow).show_player_finances };
 }
 
 /** Temporadas cadastradas, da mais recente para a mais antiga. */

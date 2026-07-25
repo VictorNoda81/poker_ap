@@ -18,12 +18,21 @@ function label(place: 1 | 2 | 3, inProgress: boolean): string {
   return place === 2 ? "Vice" : "3º lugar";
 }
 
-function PodiumCard({ row, inProgress }: { row: RankingRow; inProgress: boolean }) {
+function PodiumCard({
+  row,
+  inProgress,
+  showFinances,
+}: {
+  row: RankingRow;
+  inProgress: boolean;
+  showFinances: boolean;
+}) {
   const place = row.displayPosition as 1 | 2 | 3;
   const style = PODIUM_STYLE[place];
-  // Sem o gasto de todas as etapas, o saldo não é calculável — mostrar um
+  // Saldo só quando o admin permite E há gasto de todas as etapas — mostrar um
   // "lucro" só com prêmios seria enganoso.
-  const semFinanceiro = row.stagesMissingFinancials > 0 || row.totalPaid === 0;
+  const mostrarSaldo =
+    showFinances && row.stagesMissingFinancials === 0 && row.totalPaid > 0;
 
   return (
     <Link
@@ -47,7 +56,7 @@ function PodiumCard({ row, inProgress }: { row: RankingRow; inProgress: boolean 
         </p>
         <p className="mt-1 truncate text-[0.7rem] text-chalk-dim">
           {row.stagesPlayed} etapas · {row.wins} {row.wins === 1 ? "vitória" : "vitórias"}
-          {semFinanceiro ? "" : ` · ${formatBRLSigned(row.balance)}`}
+          {mostrarSaldo ? ` · ${formatBRLSigned(row.balance)}` : ""}
         </p>
       </div>
 
@@ -69,7 +78,15 @@ function PodiumCard({ row, inProgress }: { row: RankingRow; inProgress: boolean 
  * Havendo empate, o pódio cresce (ex.: 1º, 1º, 2º e 3º), porque cortar em três
  * esconderia alguém que está tecnicamente no pódio.
  */
-export function Podium({ rows, inProgress }: { rows: RankingRow[]; inProgress: boolean }) {
+export function Podium({
+  rows,
+  inProgress,
+  showFinances = true,
+}: {
+  rows: RankingRow[];
+  inProgress: boolean;
+  showFinances?: boolean;
+}) {
   const top = rows.filter(
     (row) => row.stagesPlayed > 0 && row.displayPosition >= 1 && row.displayPosition <= 3,
   );
@@ -78,7 +95,12 @@ export function Podium({ rows, inProgress }: { rows: RankingRow[]; inProgress: b
   return (
     <section aria-label="Destaques" className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {top.map((row) => (
-        <PodiumCard key={row.player.id} row={row} inProgress={inProgress} />
+        <PodiumCard
+          key={row.player.id}
+          row={row}
+          inProgress={inProgress}
+          showFinances={showFinances}
+        />
       ))}
     </section>
   );

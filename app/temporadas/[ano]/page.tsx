@@ -12,7 +12,7 @@ import {
   SetupNotice,
   StatCard,
 } from "@/components/ui/primitives";
-import { getSeasonBundle, getSeasonByYear } from "@/lib/db/queries";
+import { getAppSettings, getSeasonBundle, getSeasonByYear } from "@/lib/db/queries";
 import { load } from "@/lib/db/load";
 import { formatBRL, formatNumber } from "@/lib/domain/money";
 
@@ -33,14 +33,16 @@ export default async function TemporadaPage({ params }: Params) {
   const result = await load(async () => {
     const season = await getSeasonByYear(year);
     if (!season) return null;
-    return getSeasonBundle(season);
+    const [bundle, appSettings] = await Promise.all([getSeasonBundle(season), getAppSettings()]);
+    return { ...bundle, appSettings };
   });
 
   if (result.status === "unconfigured") return <SetupNotice />;
   if (result.status === "error") return <ErrorNotice message={result.message} />;
   if (!result.data) notFound();
 
-  const { season, ranking, stages, accumulatedReserve, finalPot, totals, settings } = result.data;
+  const { season, ranking, stages, accumulatedReserve, finalPot, totals, settings, appSettings } =
+    result.data;
   const realizadas = stages.filter((s) => s.status === "completed");
   const jogadoresAtivos = ranking.filter((r) => r.stagesPlayed > 0).length;
   const final = stages.find((s) => s.isFinal);
@@ -78,7 +80,11 @@ export default async function TemporadaPage({ params }: Params) {
         />
       ) : (
         <>
-          <Podium rows={ranking} inProgress={inProgress} />
+          <Podium
+            rows={ranking}
+            inProgress={inProgress}
+            showFinances={appSettings.showPlayerFinances}
+          />
           <FinalPotCard
             pot={finalPot}
             ranking={ranking}
@@ -88,7 +94,7 @@ export default async function TemporadaPage({ params }: Params) {
           <div id="classificacao" className="section-title mb-4">
             Classificação da temporada
           </div>
-          <RankingTable rows={ranking} />
+          <RankingTable rows={ranking} showFinancials={appSettings.showPlayerFinances} />
         </>
       )}
 

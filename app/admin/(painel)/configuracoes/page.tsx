@@ -1,8 +1,14 @@
 import Link from "next/link";
-import { saveSettings } from "@/app/admin/actions";
+import { saveAppSettings, saveSettings } from "@/app/admin/actions";
 import { AdminCard, Field, Flash, PrimaryButton, inputClass } from "@/components/admin/ui";
 import { ErrorNotice, SetupNotice } from "@/components/ui/primitives";
-import { getCurrentSeason, getSeasonBundle, listSeasons } from "@/lib/db/queries";
+import {
+  getAppSettings,
+  getCurrentSeason,
+  getSeasonBundle,
+  listSeasons,
+  type AppSettings,
+} from "@/lib/db/queries";
 import { load } from "@/lib/db/load";
 import { formatBRL, formatNumber } from "@/lib/domain/money";
 import { splitFinalPot, suggestStagePrizes } from "@/lib/domain/prizes";
@@ -19,22 +25,26 @@ export default async function AdminConfiguracoes({ searchParams }: { searchParam
 
   const result = await load(async () => {
     const seasons = await listSeasons();
-    if (seasons.length === 0) return null;
+    if (seasons.length === 0) return { seasons, bundle: null, appSettings: await getAppSettings() };
     const selected =
       seasons.find((s) => s.id === temporada) ?? (await getCurrentSeason()) ?? seasons[0];
-    return { seasons, bundle: await getSeasonBundle(selected) };
+    const [bundle, appSettings] = await Promise.all([getSeasonBundle(selected), getAppSettings()]);
+    return { seasons, bundle, appSettings };
   });
 
   if (result.status === "unconfigured") return <SetupNotice />;
   if (result.status === "error") return <ErrorNotice message={result.message} />;
 
-  if (!result.data) {
+  const { seasons, bundle, appSettings } = result.data;
+
+  if (!bundle) {
     return (
       <>
         <Flash ok={ok} erro={erro} />
+        <AreaPublicaCard appSettings={appSettings} />
         <AdminCard title="Nenhuma temporada cadastrada">
           <p className="text-sm text-chalk-dim">
-            As configurações são por temporada.{" "}
+            As configurações de pontuação e premiação são por temporada.{" "}
             <Link href="/admin/temporadas" className="font-semibold text-cap-red-light">
               Crie a primeira
             </Link>
@@ -45,7 +55,6 @@ export default async function AdminConfiguracoes({ searchParams }: { searchParam
     );
   }
 
-  const { seasons, bundle } = result.data;
   const { season, settings, pointsTable } = bundle;
 
   // Colocações a exibir: as que existem na tabela, sempre cobrindo 1 a 15.
@@ -71,6 +80,8 @@ export default async function AdminConfiguracoes({ searchParams }: { searchParam
   return (
     <>
       <Flash ok={ok} erro={erro} />
+
+      <AreaPublicaCard appSettings={appSettings} />
 
       {seasons.length > 1 ? (
         <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -409,5 +420,42 @@ export default async function AdminConfiguracoes({ searchParams }: { searchParam
         <PrimaryButton>Salvar configurações</PrimaryButton>
       </form>
     </>
+  );
+}
+
+/**
+ * Liga/desliga a exibição de Pago, Saldo e ROI por jogador na área pública.
+ * É uma preferência GLOBAL (vale para todas as temporadas), por isso mora num
+ * formulário próprio, separado das configurações por temporada. O Prêmio — o
+ * que o jogador ganhou — continua sempre visível.
+ */
+function AreaPublicaCard({ appSettings }: { appSettings: AppSettings }) {
+  return (
+    <AdminCard
+      title="Área pública"
+      description="Vale para o site inteiro, todas as temporadas."
+    >
+      <form action={saveAppSettings} className="space-y-4">
+        <label className="flex items-start gap-3 text-sm text-chalk">
+          <input
+            type="checkbox"
+            name="mostrarFinancas"
+            defaultChecked={appSettings.showPlayerFinances}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-ink-600 bg-ink-950 accent-cap-red"
+          />
+          <span>
+            Mostrar <strong>quanto cada jogador pagou, o saldo e o ROI</strong> nas tabelas
+            públicas.
+            <span className="mt-1 block text-xs text-chalk-dim">
+              Desmarcado, some tudo isso do ranking, das etapas e das fichas de jogador. O{" "}
+              <strong className="text-chalk-dim/90">Prêmio</strong> (o que cada um ganhou) continua
+              aparecendo.
+            </span>
+          </span>
+        </label>
+
+        <PrimaryButton>Salvar preferência</PrimaryButton>
+      </form>
+    </AdminCard>
   );
 }

@@ -10,7 +10,7 @@ import {
   SetupNotice,
   StatCard,
 } from "@/components/ui/primitives";
-import { getPlayerDetail } from "@/lib/db/queries";
+import { getAppSettings, getPlayerDetail } from "@/lib/db/queries";
 import { load } from "@/lib/db/load";
 import { formatBRL, formatBRLSigned, formatNumber } from "@/lib/domain/money";
 import { formatShortDate, stageName } from "@/lib/domain/stage-name";
@@ -35,13 +35,17 @@ function placementClass(placement: number | null): string {
 
 export default async function JogadorPage({ params }: Params) {
   const { id } = await params;
-  const result = await load(() => getPlayerDetail(id));
+  const result = await load(async () => {
+    const [detail, appSettings] = await Promise.all([getPlayerDetail(id), getAppSettings()]);
+    return detail ? { detail, appSettings } : null;
+  });
 
   if (result.status === "unconfigured") return <SetupNotice />;
   if (result.status === "error") return <ErrorNotice message={result.message} />;
   if (!result.data) notFound();
 
-  const { player, bySeason, career } = result.data;
+  const { player, bySeason, career } = result.data.detail;
+  const showFinances = result.data.appSettings.showPlayerFinances;
   const semFinanceiro = career.totalPaid === 0 && career.totalReceived === 0;
   // Re-buy/add-on só entrou no lançamento em 2026: com etapa em branco, somar o
   // que existe daria um número menor que o real e pareceria economia.
@@ -67,7 +71,9 @@ export default async function JogadorPage({ params }: Params) {
       />
 
       {/* Números de carreira, somando todas as temporadas. */}
-      <section className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <section
+        className={`mb-8 grid grid-cols-2 gap-3 ${showFinances ? "lg:grid-cols-6" : "lg:grid-cols-4"}`}
+      >
         <StatCard
           label="Pontos na carreira"
           value={formatNumber(career.totalPoints)}
@@ -93,17 +99,28 @@ export default async function JogadorPage({ params }: Params) {
               : `${career.totalAddons} add-ons · ${formatNumber(mediaRebuys ?? 0, 1)} por etapa`
           }
         />
+        {/* Prêmio: sempre visível — é o que o jogador ganhou. */}
         <StatCard
-          label="Total pago"
-          value={semFinanceiro ? "—" : formatBRL(career.totalPaid)}
-          hint="Buy-ins, re-buys e add-ons"
+          label="Prêmios na carreira"
+          value={career.totalReceived === 0 ? "—" : formatBRL(career.totalReceived)}
+          hint="Somando todas as temporadas"
+          tone={career.totalReceived > 0 ? "gold" : "default"}
         />
-        <StatCard
-          label="Saldo"
-          value={semFinanceiro ? "—" : formatBRLSigned(career.balance)}
-          hint={semFinanceiro ? "Sem financeiro lançado" : `Prêmios: ${formatBRL(career.totalReceived)}`}
-          tone={semFinanceiro ? "default" : career.balance >= 0 ? "positive" : "negative"}
-        />
+        {showFinances ? (
+          <>
+            <StatCard
+              label="Total pago"
+              value={semFinanceiro ? "—" : formatBRL(career.totalPaid)}
+              hint="Buy-ins, re-buys e add-ons"
+            />
+            <StatCard
+              label="Saldo"
+              value={semFinanceiro ? "—" : formatBRLSigned(career.balance)}
+              hint={semFinanceiro ? "Sem financeiro lançado" : "Prêmios menos gastos"}
+              tone={semFinanceiro ? "default" : career.balance >= 0 ? "positive" : "negative"}
+            />
+          </>
+        ) : null}
       </section>
 
       {bySeason.length === 0 ? (
@@ -156,18 +173,28 @@ export default async function JogadorPage({ params }: Params) {
                   }
                 />
                 <Summary
-                  label="Saldo"
-                  value={
-                    row.totalPaid === 0 && row.totalReceived === 0
-                      ? "—"
-                      : formatBRLSigned(row.balance)
-                  }
+                  label="Prêmio"
+                  value={row.totalReceived === 0 ? "—" : formatBRL(row.totalReceived)}
                 />
+                {showFinances ? (
+                  <Summary
+                    label="Saldo"
+                    value={
+                      row.totalPaid === 0 && row.totalReceived === 0
+                        ? "—"
+                        : formatBRLSigned(row.balance)
+                    }
+                  />
+                ) : null}
               </dl>
 
               {/* Etapa a etapa. */}
               <div className="card table-scroll">
-                <table className="w-full min-w-[48rem] border-collapse text-sm">
+                <table
+                  className={`w-full border-collapse text-sm ${
+                    showFinances ? "min-w-[48rem]" : "min-w-[40rem]"
+                  }`}
+                >
                   <thead>
                     <tr className="border-b border-ink-800 text-left text-[0.65rem] uppercase tracking-[0.12em] text-chalk-dim">
                       <th scope="col" className="px-3 py-3 font-bold">Etapa</th>
@@ -176,8 +203,10 @@ export default async function JogadorPage({ params }: Params) {
                       <th scope="col" className="px-3 py-3 text-right font-bold">Pontos</th>
                       <th scope="col" className="px-3 py-3 text-right font-bold">Re-buys</th>
                       <th scope="col" className="px-3 py-3 text-right font-bold">Add-on</th>
-                      <th scope="col" className="px-3 py-3 text-right font-bold">Pago</th>
                       <th scope="col" className="px-3 py-3 text-right font-bold">Prêmio</th>
+                      {showFinances ? (
+                        <th scope="col" className="px-3 py-3 text-right font-bold">Pago</th>
+                      ) : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -217,9 +246,6 @@ export default async function JogadorPage({ params }: Params) {
                         <td className="tnum px-3 py-3 text-right text-chalk-dim">
                           {r.hadAddon === null ? "—" : r.hadAddon ? "sim" : "não"}
                         </td>
-                        <td className="tnum px-3 py-3 text-right text-chalk-dim">
-                          {r.amountPaid === null ? "—" : formatBRL(r.amountPaid)}
-                        </td>
                         <td
                           className={`tnum px-3 py-3 text-right ${
                             r.prizeAmount > 0 ? "font-bold text-gold" : "text-chalk-dim"
@@ -227,6 +253,11 @@ export default async function JogadorPage({ params }: Params) {
                         >
                           {r.prizeAmount > 0 ? formatBRL(r.prizeAmount) : "—"}
                         </td>
+                        {showFinances ? (
+                          <td className="tnum px-3 py-3 text-right text-chalk-dim">
+                            {r.amountPaid === null ? "—" : formatBRL(r.amountPaid)}
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>

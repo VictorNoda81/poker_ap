@@ -8,7 +8,7 @@ import {
   SetupNotice,
   StatCard,
 } from "@/components/ui/primitives";
-import { getStageDetail } from "@/lib/db/queries";
+import { getAppSettings, getStageDetail } from "@/lib/db/queries";
 import { load } from "@/lib/db/load";
 import { formatBRL, formatNumber } from "@/lib/domain/money";
 import { StageResultsTable } from "@/components/stage-results-table";
@@ -29,13 +29,16 @@ export async function generateMetadata({ params }: Params) {
 
 export default async function EtapaPage({ params }: Params) {
   const { id } = await params;
-  const result = await load(() => getStageDetail(id));
+  const result = await load(async () => {
+    const [detail, appSettings] = await Promise.all([getStageDetail(id), getAppSettings()]);
+    return detail ? { ...detail, appSettings } : null;
+  });
 
   if (result.status === "unconfigured") return <SetupNotice />;
   if (result.status === "error") return <ErrorNotice message={result.message} />;
   if (!result.data) notFound();
 
-  const { stage, season, entries } = result.data;
+  const { stage, season, entries, appSettings } = result.data;
   const nome = stageName(stage.number, stage.eventDate, stage.isFinal);
 
   // Confere se prêmios + reserva batem com a arrecadação — mesma validação
@@ -170,6 +173,7 @@ export default async function EtapaPage({ params }: Params) {
             needsReview: e.needsReview,
             reviewNote: e.reviewNote,
           }))}
+          showFinances={appSettings.showPlayerFinances}
         />
       )}
 

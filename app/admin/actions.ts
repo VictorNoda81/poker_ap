@@ -422,6 +422,36 @@ export async function saveSettings(formData: FormData): Promise<void> {
 }
 
 // ===========================================================================
+// Preferências globais do app
+// ===========================================================================
+
+export async function saveAppSettings(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const db = getAdminClient();
+
+  // Checkbox: presente = ligado. É "mostrar", então ausência = ocultar.
+  const showPlayerFinances = formData.get("mostrarFinancas") !== null;
+
+  const { error } = await db
+    .from("app_settings")
+    .update({ show_player_finances: showPlayerFinances, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) {
+    redirect("/admin/configuracoes?erro=" + encodeURIComponent(error.message));
+  }
+
+  revalidateEverything();
+  redirect(
+    "/admin/configuracoes?ok=" +
+      encodeURIComponent(
+        showPlayerFinances
+          ? "Pago, saldo e ROI voltaram a aparecer na área pública."
+          : "Pago, saldo e ROI ficaram ocultos na área pública. O prêmio continua visível.",
+      ),
+  );
+}
+
+// ===========================================================================
 // Etapa Final
 // ===========================================================================
 

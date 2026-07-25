@@ -11,7 +11,7 @@ import {
   SetupNotice,
   StatCard,
 } from "@/components/ui/primitives";
-import { getCurrentSeason, getSeasonBundle, listSeasons } from "@/lib/db/queries";
+import { getAppSettings, getCurrentSeason, getSeasonBundle, listSeasons } from "@/lib/db/queries";
 import { load } from "@/lib/db/load";
 import { formatBRL, formatNumber } from "@/lib/domain/money";
 import { formatShortDate, stageName } from "@/lib/domain/stage-name";
@@ -33,7 +33,8 @@ export default async function HomePage({
     // A temporada da URL, senão a atual, senão a mais recente.
     const season =
       seasons.find((s) => s.year === anoPedido) ?? (await getCurrentSeason()) ?? seasons[0];
-    return { seasons, bundle: await getSeasonBundle(season) };
+    const [bundle, appSettings] = await Promise.all([getSeasonBundle(season), getAppSettings()]);
+    return { seasons, bundle, appSettings };
   });
 
   if (result.status === "unconfigured") return <SetupNotice />;
@@ -48,7 +49,7 @@ export default async function HomePage({
     );
   }
 
-  const { seasons, bundle } = result.data;
+  const { seasons, bundle, appSettings } = result.data;
   const { season, ranking, stages, accumulatedReserve, finalPot, totals, settings } = bundle;
   const realizadas = stages.filter((s) => s.status === "completed");
   const proxima = stages.find((s) => s.status === "scheduled");
@@ -124,7 +125,11 @@ export default async function HomePage({
         />
       ) : (
         <>
-          <Podium rows={ranking} inProgress={inProgress} />
+          <Podium
+            rows={ranking}
+            inProgress={inProgress}
+            showFinances={appSettings.showPlayerFinances}
+          />
           <FinalPotCard
             pot={finalPot}
             ranking={ranking}
@@ -134,13 +139,19 @@ export default async function HomePage({
           <div id="classificacao" className="section-title mb-4">
             Classificação geral
           </div>
-          <RankingTable rows={ranking} />
+          <RankingTable rows={ranking} showFinancials={appSettings.showPlayerFinances} />
           <p className="mt-4 text-xs leading-relaxed text-chalk-dim">
-            <strong className="text-chalk-dim/90">Pago</strong> é o total que o jogador gastou
-            (buy-in, re-buys e add-on). <strong className="text-chalk-dim/90">Arrecadado</strong> é
-            o total que recebeu de premiação.{" "}
-            <strong className="text-chalk-dim/90">Saldo</strong> é a diferença entre os dois. As
-            médias consideram apenas as etapas em que o jogador participou.
+            <strong className="text-chalk-dim/90">Prêmio</strong> é o total que o jogador recebeu de
+            premiação.
+            {appSettings.showPlayerFinances ? (
+              <>
+                {" "}
+                <strong className="text-chalk-dim/90">Pago</strong> é o total que gastou (buy-in,
+                re-buys e add-on) e <strong className="text-chalk-dim/90">Saldo</strong> é a
+                diferença entre os dois.
+              </>
+            ) : null}{" "}
+            As médias consideram apenas as etapas em que o jogador participou.
           </p>
         </>
       )}

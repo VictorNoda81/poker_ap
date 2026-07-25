@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PlayerTypeBadge } from "@/components/ui/primitives";
-import { formatBRLSigned, formatNumber } from "@/lib/domain/money";
+import { formatBRL, formatBRLSigned, formatNumber } from "@/lib/domain/money";
 import type { PlayerAcrossSeasons } from "@/lib/db/queries";
 
 const DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
@@ -115,9 +115,11 @@ type Linha = { player: PlayerAcrossSeasons; agg: Aggregate };
 export function PlayersDirectory({
   seasons,
   players,
+  showFinances = true,
 }: {
   seasons: { year: number; name: string }[];
   players: PlayerAcrossSeasons[];
+  showFinances?: boolean;
 }) {
   const anos = useMemo(() => seasons.map((s) => s.year).sort((a, b) => b - a), [seasons]);
 
@@ -342,24 +344,37 @@ export function PlayersDirectory({
                         {agg.stagesPlayed}
                       </dd>
                     </div>
-                    <div>
-                      <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">
-                        Saldo
-                      </dt>
-                      <dd
-                        className={`tnum mt-0.5 text-sm font-bold ${
-                          semFinanceiro
-                            ? "text-chalk-dim"
-                            : agg.balance > 0
-                              ? "text-emerald-400"
-                              : agg.balance < 0
-                                ? "text-cap-red-light"
-                                : "text-chalk-dim"
-                        }`}
-                      >
-                        {semFinanceiro ? "—" : formatBRLSigned(agg.balance)}
-                      </dd>
-                    </div>
+                    {/* Com finanças ocultas, mostra o Prêmio (o que ganhou) no
+                        lugar do Saldo — este revela o gasto. */}
+                    {showFinances ? (
+                      <div>
+                        <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">
+                          Saldo
+                        </dt>
+                        <dd
+                          className={`tnum mt-0.5 text-sm font-bold ${
+                            semFinanceiro
+                              ? "text-chalk-dim"
+                              : agg.balance > 0
+                                ? "text-emerald-400"
+                                : agg.balance < 0
+                                  ? "text-cap-red-light"
+                                  : "text-chalk-dim"
+                          }`}
+                        >
+                          {semFinanceiro ? "—" : formatBRLSigned(agg.balance)}
+                        </dd>
+                      </div>
+                    ) : (
+                      <div>
+                        <dt className="text-[0.58rem] uppercase tracking-wider text-chalk-dim">
+                          Prêmio
+                        </dt>
+                        <dd className="tnum mt-0.5 text-sm font-bold text-gold">
+                          {agg.totalReceived === 0 ? "—" : formatBRL(agg.totalReceived)}
+                        </dd>
+                      </div>
+                    )}
                   </dl>
 
                   {/* Médias por etapa jogada. */}

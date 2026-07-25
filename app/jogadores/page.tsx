@@ -1,6 +1,6 @@
 import { PlayersDirectory } from "@/components/players-directory";
 import { EmptyState, ErrorNotice, PageHeading, SetupNotice } from "@/components/ui/primitives";
-import { getPlayersAcrossSeasons } from "@/lib/db/queries";
+import { getAppSettings, getPlayersAcrossSeasons } from "@/lib/db/queries";
 import { load } from "@/lib/db/load";
 
 export const dynamic = "force-dynamic";
@@ -8,12 +8,15 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Jogadores" };
 
 export default async function JogadoresPage() {
-  const result = await load(getPlayersAcrossSeasons);
+  const result = await load(async () => {
+    const [dir, appSettings] = await Promise.all([getPlayersAcrossSeasons(), getAppSettings()]);
+    return { ...dir, appSettings };
+  });
 
   if (result.status === "unconfigured") return <SetupNotice />;
   if (result.status === "error") return <ErrorNotice message={result.message} />;
 
-  const { seasons, players } = result.data;
+  const { seasons, players, appSettings } = result.data;
 
   if (players.length === 0) {
     return (
@@ -34,7 +37,11 @@ export default async function JogadoresPage() {
         title="Jogadores"
         subtitle="Filtre por temporada (várias ao mesmo tempo) ou escolha “Todas” para o histórico completo. Abra um jogador para ver etapa a etapa."
       />
-      <PlayersDirectory seasons={seasons} players={players} />
+      <PlayersDirectory
+        seasons={seasons}
+        players={players}
+        showFinances={appSettings.showPlayerFinances}
+      />
     </>
   );
 }

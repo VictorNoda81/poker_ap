@@ -34,15 +34,24 @@ type SortKey =
   | "premio"
   | "saldo";
 
-const COLUMNS: { key: SortKey; label: string; align: "left" | "right"; lowerIsBetter?: boolean }[] = [
+const COLUMNS: {
+  key: SortKey;
+  label: string;
+  align: "left" | "right";
+  lowerIsBetter?: boolean;
+  /** Coluna monetária larga (não pode quebrar em duas linhas). */
+  money?: boolean;
+  /** Some quando o admin oculta as finanças do jogador (Prêmio nunca some). */
+  financial?: boolean;
+}[] = [
   { key: "colocacao", label: "Col.", align: "left", lowerIsBetter: true },
   { key: "jogador", label: "Jogador", align: "left", lowerIsBetter: true },
   { key: "pontos", label: "Pontos", align: "right" },
   { key: "rebuys", label: "Re-buys", align: "right", lowerIsBetter: true },
   { key: "addon", label: "Add-on", align: "right", lowerIsBetter: true },
-  { key: "pago", label: "Pago", align: "right" },
-  { key: "premio", label: "Prêmio", align: "right" },
-  { key: "saldo", label: "Saldo", align: "right" },
+  { key: "premio", label: "Prêmio", align: "right", money: true },
+  { key: "pago", label: "Pago", align: "right", money: true, financial: true },
+  { key: "saldo", label: "Saldo", align: "right", money: true, financial: true },
 ];
 
 function placementClass(placement: number): string {
@@ -78,9 +87,20 @@ function sortValue(row: StageResultRow, key: SortKey): number | string | null {
   }
 }
 
-export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
+export function StageResultsTable({
+  rows,
+  showFinances = true,
+}: {
+  rows: StageResultRow[];
+  showFinances?: boolean;
+}) {
   const [sortKey, setSortKey] = useState<SortKey>("colocacao");
   const [asc, setAsc] = useState(true);
+
+  const columns = useMemo(
+    () => COLUMNS.filter((c) => showFinances || !c.financial),
+    [showFinances],
+  );
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
@@ -110,26 +130,36 @@ export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
     <>
       <p className="mb-2 text-xs text-chalk-dim">Toque num título para ordenar.</p>
       <div className="card table-scroll">
-        <table className="w-full min-w-[43rem] table-fixed border-collapse text-sm">
+        <table
+          className={`w-full table-fixed border-collapse text-sm ${
+            showFinances ? "min-w-[43rem]" : "min-w-[32rem]"
+          }`}
+        >
           {/* Colunas estreitas de propósito: no celular, uma coluna de nome larga
               empurrava os Pontos para longe do jogador. Nomes compridos truncam
               com "…" e aparecem inteiros no title. A última coluna não tem
               largura — ela absorve a sobra em vez de o nome esticar. */}
           <colgroup>
-            <col className="w-[3.5rem]" />
-            <col className="w-[9rem]" />
-            <col className="w-[4.5rem]" />
-            <col className="w-[4.5rem]" />
-            <col className="w-[4.5rem]" />
-            <col className="w-[6.5rem]" />
-            <col className="w-[6.5rem]" />
-            <col className="w-[6.5rem]" />
+            {columns.map((c) => (
+              <col
+                key={c.key}
+                className={
+                  c.key === "colocacao"
+                    ? "w-[3.5rem]"
+                    : c.key === "jogador"
+                      ? "w-[9rem]"
+                      : c.money
+                        ? "w-[6.5rem]"
+                        : "w-[4.5rem]"
+                }
+              />
+            ))}
             <col />
           </colgroup>
 
           <thead>
             <tr className="border-b border-ink-800 text-left text-[0.65rem] uppercase tracking-[0.1em] text-chalk-dim">
-              {COLUMNS.map((c) => {
+              {columns.map((c) => {
                 const active = sortKey === c.key;
                 return (
                   <th
@@ -213,9 +243,7 @@ export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
                   <td className="tnum px-1.5 py-2.5 text-right text-chalk-dim">
                     {row.hadAddon === null ? "—" : row.hadAddon ? "sim" : "não"}
                   </td>
-                  <td className="tnum whitespace-nowrap px-1.5 py-2.5 text-right text-chalk-dim">
-                    {row.amountPaid === null ? "—" : formatBRL(row.amountPaid)}
-                  </td>
+                  {/* Prêmio: sempre visível — é o que o jogador ganhou. */}
                   <td
                     className={`tnum whitespace-nowrap px-1.5 py-2.5 text-right ${
                       row.prizeAmount > 0 ? "font-bold text-gold" : "text-chalk-dim"
@@ -223,19 +251,27 @@ export function StageResultsTable({ rows }: { rows: StageResultRow[] }) {
                   >
                     {row.prizeAmount > 0 ? formatBRL(row.prizeAmount) : "—"}
                   </td>
-                  <td
-                    className={`tnum whitespace-nowrap px-1.5 py-2.5 text-right font-semibold ${
-                      saldo === null
-                        ? "text-chalk-dim"
-                        : saldo > 0
-                          ? "text-emerald-400"
-                          : saldo < 0
-                            ? "text-cap-red-light"
-                            : "text-chalk-dim"
-                    }`}
-                  >
-                    {saldo === null ? "—" : formatBRL(saldo)}
-                  </td>
+
+                  {showFinances ? (
+                    <>
+                      <td className="tnum whitespace-nowrap px-1.5 py-2.5 text-right text-chalk-dim">
+                        {row.amountPaid === null ? "—" : formatBRL(row.amountPaid)}
+                      </td>
+                      <td
+                        className={`tnum whitespace-nowrap px-1.5 py-2.5 text-right font-semibold ${
+                          saldo === null
+                            ? "text-chalk-dim"
+                            : saldo > 0
+                              ? "text-emerald-400"
+                              : saldo < 0
+                                ? "text-cap-red-light"
+                                : "text-chalk-dim"
+                        }`}
+                      >
+                        {saldo === null ? "—" : formatBRL(saldo)}
+                      </td>
+                    </>
+                  ) : null}
                   <td aria-hidden="true" className="px-0" />
                 </tr>
               );
