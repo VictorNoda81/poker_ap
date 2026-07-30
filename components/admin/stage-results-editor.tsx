@@ -11,7 +11,9 @@ import {
   type PrizeSettings,
 } from "@/lib/domain/prizes";
 import { pointsForPlacement, suggestAmountPaid } from "@/lib/domain/scoring";
+import { buildStageMessage, type ShareEntry } from "@/lib/domain/share";
 import type { RankingPlayer } from "@/lib/domain/ranking";
+import { WhatsAppShare } from "@/components/share/whatsapp-share";
 
 export interface EditorSettings extends PrizeSettings {
   rebuy: number;
@@ -62,6 +64,7 @@ function toRow(entry: EditorEntry): Row {
 
 export function StageResultsEditor({
   stageId,
+  stageLabel,
   players,
   settings,
   pointsTable,
@@ -74,6 +77,8 @@ export function StageResultsEditor({
   initialOtherCosts,
 }: {
   stageId: string;
+  /** Nome da etapa ("Etapa 7 - Jul/26"), usado na mensagem de WhatsApp. */
+  stageLabel: string;
   players: RankingPlayer[];
   settings: EditorSettings;
   pointsTable: Record<number, number>;
@@ -162,6 +167,27 @@ export function StageResultsEditor({
     : validatePrizeDistribution(gross, deducoes, breakdown.reserve, [prizeTotal]);
 
   // --- Manipulação das linhas ----------------------------------------------
+
+  /**
+   * Mensagem de WhatsApp a partir do estado ATUAL da grade. Colocação em branco
+   * = ainda na mesa; preenchida = eliminado naquela posição. Recalculada a cada
+   * clique, então serve de parcial durante a etapa e de final ao terminar.
+   */
+  function buildStageWhatsApp(): string {
+    const entries: ShareEntry[] = rows.map((row) => {
+      const placement = row.placement.trim() === "" ? null : Number(row.placement);
+      return {
+        name: playersById.get(row.playerId)?.fullName ?? "Jogador",
+        placement: placement !== null && placement >= 1 ? placement : null,
+        points: pointsForPlacement(
+          placement !== null && placement >= 1 ? placement : null,
+          pointsTable,
+          settings.pointsBelowCutoff,
+        ),
+      };
+    });
+    return buildStageMessage(stageLabel, entries);
+  }
 
   function update(playerId: string, patch: Partial<Row>) {
     setRows((current) =>
@@ -339,6 +365,12 @@ export function StageResultsEditor({
                 Aplicar premiação sugerida
               </GhostButton>
             </div>
+          </div>
+
+          {/* Parcial para o grupo: colocação em branco = ainda na mesa. Pode
+              gerar quantas vezes quiser, à medida que a etapa avança. */}
+          <div className="border-b border-ink-800 px-4 py-3">
+            <WhatsAppShare label="Parcial da etapa para o WhatsApp" buildMessage={buildStageWhatsApp} />
           </div>
 
           <div className="table-scroll">

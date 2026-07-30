@@ -166,6 +166,7 @@ export default async function AdminEtapa({ params, searchParams }: Params) {
       {/* ------------------------------------------------------------------ */}
       <StageResultsEditor
         stageId={stage.id}
+        stageLabel={nome}
         players={players}
         settings={{
           buyin: bundle.settings.buyin,

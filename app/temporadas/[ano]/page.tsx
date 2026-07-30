@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { TrophyIcon } from "@/components/brand/icons";
 import { FinalPotCard } from "@/components/final-pot-card";
 import { Podium } from "@/components/ranking/podium";
+import { RankingImage } from "@/components/ranking/ranking-image";
 import { RankingTable } from "@/components/ranking/ranking-table";
 import { StagesList } from "@/components/stages-list";
 import {
@@ -91,8 +92,19 @@ export default async function TemporadaPage({ params }: Params) {
             rankingSharePct={settings.rankingSharePct}
             inProgress={inProgress}
           />
-          <div id="classificacao" className="section-title mb-4">
-            Classificação da temporada
+          <div id="classificacao" className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <span className="section-title">Classificação da temporada</span>
+            <RankingImage
+              title={season.name}
+              subtitle={`${realizadas.length} ${realizadas.length === 1 ? "etapa disputada" : "etapas disputadas"}${inProgress ? " · parcial" : ""}`}
+              rows={ranking.map((r) => ({
+                position: r.displayPosition,
+                name: r.player.fullName,
+                points: r.totalPoints,
+                stagesPlayed: r.stagesPlayed,
+                wins: r.wins,
+              }))}
+            />
           </div>
           <RankingTable rows={ranking} showFinancials={appSettings.showPlayerFinances} />
         </>

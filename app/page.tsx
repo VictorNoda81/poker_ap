@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChipIcon, TrophyIcon } from "@/components/brand/icons";
 import { FinalPotCard } from "@/components/final-pot-card";
+import { RankingImage } from "@/components/ranking/ranking-image";
 import { Podium } from "@/components/ranking/podium";
 import { RankingTable } from "@/components/ranking/ranking-table";
 import { SeasonTabs } from "@/components/season-tabs";
@@ -136,8 +137,19 @@ export default async function HomePage({
             rankingSharePct={settings.rankingSharePct}
             inProgress={inProgress}
           />
-          <div id="classificacao" className="section-title mb-4">
-            Classificação geral
+          <div id="classificacao" className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <span className="section-title">Classificação geral</span>
+            <RankingImage
+              title={season.name}
+              subtitle={`${realizadas.length} ${realizadas.length === 1 ? "etapa disputada" : "etapas disputadas"}${inProgress ? " · parcial" : ""}`}
+              rows={ranking.map((r) => ({
+                position: r.displayPosition,
+                name: r.player.fullName,
+                points: r.totalPoints,
+                stagesPlayed: r.stagesPlayed,
+                wins: r.wins,
+              }))}
+            />
           </div>
           <RankingTable rows={ranking} showFinancials={appSettings.showPlayerFinances} />
           <p className="mt-4 text-xs leading-relaxed text-chalk-dim">
