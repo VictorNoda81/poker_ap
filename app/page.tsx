@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChipIcon, TrophyIcon } from "@/components/brand/icons";
 import { FinalPotCard } from "@/components/final-pot-card";
-import { RankingImage } from "@/components/ranking/ranking-image";
+import { RankingShare } from "@/components/ranking/ranking-share";
 import { Podium } from "@/components/ranking/podium";
 import { RankingTable } from "@/components/ranking/ranking-table";
 import { SeasonTabs } from "@/components/season-tabs";
@@ -139,7 +139,7 @@ export default async function HomePage({
           />
           <div id="classificacao" className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <span className="section-title">Classificação geral</span>
-            <RankingImage
+            <RankingShare
               title={season.name}
               subtitle={`${realizadas.length} ${realizadas.length === 1 ? "etapa disputada" : "etapas disputadas"}${inProgress ? " · parcial" : ""}`}
               rows={ranking.map((r) => ({
