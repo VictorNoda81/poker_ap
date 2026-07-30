@@ -1,179 +1,220 @@
 "use client";
 
 import { useState } from "react";
+import { formatBRL, formatBRLSigned, formatNumber } from "@/lib/domain/money";
 
-/** Linha do ranking reduzida ao que o cartaz precisa. */
-export interface RankingShareRow {
+/** Uma linha do ranking com todas as métricas, para a tabela do PDF. */
+export interface RankingPdfRow {
   position: number;
   name: string;
+  type: "socio" | "convidado" | "indefinido";
   points: number;
   stagesPlayed: number;
+  averagePoints: number;
+  averagePlacement: number | null;
   wins: number;
+  seconds: number;
+  thirds: number;
+  bestPlacement: number | null;
+  bestPlacementCount: number;
+  totalRebuys: number;
+  totalAddons: number;
+  averageRebuys: number | null;
+  /** Enquanto > 0, os números de re-buy não fecham → mostra "—". */
+  stagesMissingExtras: number;
+  totalReceived: number;
+  totalPaid: number;
+  balance: number;
+  /** Enquanto > 0, Pago/Saldo/ROI não são calculáveis → mostra "—". */
+  stagesMissingFinancials: number;
 }
 
-/** Paleta do app, em hex — o canvas não lê as variáveis CSS do tema. */
-const COR = {
-  fundoTopo: "#0e4332",
-  fundoBase: "#0a2b20",
-  vermelho: "#ea1116",
-  ouro: "#f5d472",
-  prata: "#cfd6dc",
-  bronze: "#d68a45",
-  giz: "#f2f6f3",
-  gizFraco: "#a6bcae",
-} as const;
+const TIPO_LABEL: Record<RankingPdfRow["type"], string> = {
+  socio: "Sócio",
+  convidado: "Convidado",
+  indefinido: "A definir",
+};
 
-/**
- * Limite de área de canvas seguro para todos os navegadores. O iOS Safari
- * recusa canvas com área acima de ~16,7 milhões de px (imagem sai em branco).
- * Como o ranking completo pode ter 60+ linhas, a resolução é reduzida quando
- * necessário para caber — o texto continua legível, só menos "retina".
- */
-const AREA_MAXIMA = 16_000_000;
+const OURO: [number, number, number] = [224, 186, 69];
+const VERDE: [number, number, number] = [14, 67, 50];
+const VERMELHO: [number, number, number] = [234, 17, 22];
+const CINZA_CLARO: [number, number, number] = [242, 246, 243];
+const TEXTO: [number, number, number] = [20, 30, 26];
 
-function corDaPosicao(pos: number): string {
-  if (pos === 1) return COR.ouro;
-  if (pos === 2) return COR.prata;
-  if (pos === 3) return COR.bronze;
-  return COR.giz;
+function melhorTexto(row: RankingPdfRow): string {
+  if (row.bestPlacement === null) return "—";
+  return row.bestPlacementCount > 1
+    ? `${row.bestPlacement}º ×${row.bestPlacementCount}`
+    : `${row.bestPlacement}º`;
 }
 
-/** Desenha o cartaz do ranking (todas as linhas recebidas) num canvas. */
-function desenharCartaz(
+/** Monta o documento PDF do ranking completo e devolve o Blob. */
+async function gerarPdf(
   title: string,
   subtitle: string,
-  rows: RankingShareRow[],
-): HTMLCanvasElement {
-  const W = 1080;
-  const margem = 64;
-  const topo = 260;
-  const alturaLinha = 88;
-  const rodape = 96;
-  const H = topo + rows.length * alturaLinha + rodape;
+  rows: RankingPdfRow[],
+  showFinances: boolean,
+): Promise<Blob> {
+  const { jsPDF } = await import("jspdf");
+  const autoTable = (await import("jspdf-autotable")).default;
 
-  // Escala máxima 2 (nitidez), reduzida se a área estourar o limite do iOS.
-  const escala = Math.min(2, Math.sqrt(AREA_MAXIMA / (W * H)));
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const larguraPagina = doc.internal.pageSize.getWidth();
 
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.floor(W * escala);
-  canvas.height = Math.floor(H * escala);
-  const ctx = canvas.getContext("2d")!;
-  ctx.scale(escala, escala);
+  doc.setProperties({ title: `Ranking — ${title}`, subject: subtitle });
 
-  const fundo = ctx.createLinearGradient(0, 0, 0, H);
-  fundo.addColorStop(0, COR.fundoTopo);
-  fundo.addColorStop(1, COR.fundoBase);
-  ctx.fillStyle = fundo;
-  ctx.fillRect(0, 0, W, H);
+  // Cabeçalho.
+  doc.setFillColor(...VERDE);
+  doc.rect(0, 0, larguraPagina, 22, "F");
+  doc.setFillColor(...VERMELHO);
+  doc.rect(0, 0, larguraPagina, 1.5, "F");
 
-  ctx.fillStyle = COR.vermelho;
-  ctx.fillRect(0, 0, W, 12);
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.text(title, 14, 12);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(`${subtitle}  ·  Liga de Poker · Clube Alto dos Pinheiros`, 14, 18);
 
-  // Naipe decorativo grande e sutil no canto inferior.
-  ctx.save();
-  ctx.globalAlpha = 0.06;
-  ctx.fillStyle = COR.giz;
-  ctx.font = "700 220px Georgia, serif";
-  ctx.textAlign = "right";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText("♠", W - 20, H - 20);
-  ctx.restore();
+  // Colunas: sempre as métricas de jogo; Pago/Saldo/ROI só quando permitido.
+  const head = [
+    "#",
+    "Jogador",
+    "Tipo",
+    "Pontos",
+    "Etapas",
+    "Média pts",
+    "Class. média",
+    "1º",
+    "2º",
+    "3º",
+    "Melhor",
+    "Re-buys",
+    "Add-ons",
+    "RB/etapa",
+    "Prêmio",
+    ...(showFinances ? ["Pago", "Saldo", "ROI"] : []),
+  ];
 
-  // Títulos.
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = COR.vermelho;
-  ctx.font = "800 26px Arial, sans-serif";
-  ctx.fillText("LIGA DE POKER · CAP", margem, 80);
+  const body = rows.map((row) => {
+    const semExtras = row.stagesMissingExtras > 0;
+    const semGasto = row.stagesMissingFinancials > 0 || row.totalPaid === 0;
+    const roi = semGasto || row.totalPaid <= 0 ? null : row.totalReceived / row.totalPaid;
 
-  ctx.fillStyle = COR.giz;
-  ctx.font = "800 56px Arial, sans-serif";
-  ctx.fillText(title, margem, 150);
-
-  ctx.fillStyle = COR.gizFraco;
-  ctx.font = "400 26px Arial, sans-serif";
-  ctx.fillText(subtitle, margem, 195);
-
-  ctx.strokeStyle = "rgba(255,255,255,0.08)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(margem, topo - 30);
-  ctx.lineTo(W - margem, topo - 30);
-  ctx.stroke();
-
-  rows.forEach((row, i) => {
-    const y = topo + i * alturaLinha;
-    const centro = y + alturaLinha / 2;
-
-    if (i % 2 === 1) {
-      ctx.fillStyle = "rgba(255,255,255,0.03)";
-      ctx.fillRect(margem - 16, y, W - 2 * (margem - 16), alturaLinha);
+    const linha = [
+      String(row.position),
+      row.name,
+      TIPO_LABEL[row.type],
+      formatNumber(row.points),
+      String(row.stagesPlayed),
+      formatNumber(row.averagePoints, 1),
+      row.averagePlacement === null ? "—" : `${formatNumber(row.averagePlacement, 1)}º`,
+      String(row.wins),
+      String(row.seconds),
+      String(row.thirds),
+      melhorTexto(row),
+      semExtras ? "—" : String(row.totalRebuys),
+      semExtras ? "—" : String(row.totalAddons),
+      semExtras || row.averageRebuys === null ? "—" : formatNumber(row.averageRebuys, 1),
+      row.totalReceived === 0 ? "—" : formatBRL(row.totalReceived),
+    ];
+    if (showFinances) {
+      linha.push(
+        semGasto ? "—" : formatBRL(row.totalPaid),
+        semGasto ? "—" : formatBRLSigned(row.balance),
+        roi === null ? "—" : `${formatNumber(roi, 2)}×`,
+      );
     }
-
-    const cor = corDaPosicao(row.position);
-
-    ctx.beginPath();
-    ctx.arc(margem + 28, centro, 28, 0, Math.PI * 2);
-    ctx.fillStyle = row.position <= 3 ? cor : "rgba(255,255,255,0.06)";
-    ctx.fill();
-    ctx.fillStyle = row.position <= 3 ? "#0a2b20" : COR.gizFraco;
-    ctx.font = "800 28px Arial, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(String(row.position), margem + 28, centro + 1);
-
-    ctx.textAlign = "left";
-    ctx.fillStyle = COR.giz;
-    ctx.font = `${row.position <= 3 ? "800" : "600"} 32px Arial, sans-serif`;
-    const nome = row.name.length > 28 ? row.name.slice(0, 27) + "…" : row.name;
-    ctx.fillText(nome, margem + 80, centro - 8);
-
-    ctx.fillStyle = COR.gizFraco;
-    ctx.font = "400 20px Arial, sans-serif";
-    const vit = row.wins > 0 ? ` · ${row.wins} ${row.wins === 1 ? "vitória" : "vitórias"}` : "";
-    ctx.fillText(`${row.stagesPlayed} etapas${vit}`, margem + 80, centro + 20);
-
-    ctx.textAlign = "right";
-    ctx.fillStyle = cor;
-    ctx.font = "800 38px Arial, sans-serif";
-    ctx.fillText(String(row.points), W - margem, centro - 3);
-    ctx.fillStyle = COR.gizFraco;
-    ctx.font = "600 16px Arial, sans-serif";
-    ctx.fillText("PONTOS", W - margem, centro + 20);
+    return linha;
   });
 
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = COR.gizFraco;
-  ctx.font = "600 22px Arial, sans-serif";
-  ctx.fillText("Clube Alto dos Pinheiros", W / 2, H - rodape / 2);
+  autoTable(doc, {
+    head: [head],
+    body,
+    startY: 26,
+    margin: { left: 8, right: 8 },
+    theme: "grid",
+    styles: {
+      font: "helvetica",
+      fontSize: 7.5,
+      cellPadding: 1.4,
+      textColor: TEXTO,
+      lineColor: [220, 226, 222],
+      lineWidth: 0.1,
+      overflow: "ellipsize",
+    },
+    headStyles: {
+      fillColor: VERDE,
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      halign: "center",
+      fontSize: 7.5,
+    },
+    alternateRowStyles: { fillColor: CINZA_CLARO },
+    columnStyles: {
+      0: { halign: "center", cellWidth: 8 },
+      1: { halign: "left", cellWidth: 44 },
+      2: { halign: "left", cellWidth: 20 },
+      // As demais (números) alinhadas à direita.
+    },
+    // Alinha à direita tudo que é número (da coluna 3 em diante).
+    didParseCell: (data) => {
+      if (data.section === "body" && data.column.index >= 3) {
+        data.cell.styles.halign = "right";
+      }
+      // Destaque dourado para os três primeiros na coluna da posição.
+      if (data.section === "body" && data.column.index === 0) {
+        const pos = Number(data.cell.raw);
+        if (pos >= 1 && pos <= 3) {
+          data.cell.styles.fillColor = OURO;
+          data.cell.styles.textColor = VERDE;
+          data.cell.styles.fontStyle = "bold";
+        }
+      }
+    },
+    // Rodapé com paginação em cada página.
+    didDrawPage: (data) => {
+      const total = (doc.internal as unknown as { getNumberOfPages: () => number }).getNumberOfPages();
+      const pagina = data.pageNumber;
+      const alturaPagina = doc.internal.pageSize.getHeight();
+      doc.setFontSize(7);
+      doc.setTextColor(140, 150, 145);
+      doc.text(
+        `Página ${pagina} de ${total}`,
+        larguraPagina - 8,
+        alturaPagina - 5,
+        { align: "right" },
+      );
+      doc.text("poker-ap-mauve.vercel.app", 8, alturaPagina - 5);
+    },
+  });
 
-  return canvas;
-}
-
-function canvasParaBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
-  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  return doc.output("blob");
 }
 
 /**
- * Botão "Compartilhar": gera a imagem do ranking COMPLETO e abre a folha de
- * compartilhamento do sistema (Web Share). Onde o navegador não sabe
- * compartilhar arquivo (desktop antigo), baixa o PNG — em ambos os casos a
- * imagem sai pronta para mandar no grupo, sem poluir a tela com preview.
+ * Botão "Compartilhar": gera o PDF do ranking COMPLETO com todas as métricas e
+ * abre a folha de compartilhamento do sistema (Web Share). Onde o navegador não
+ * compartilha arquivo (desktop antigo), baixa o PDF.
+ *
+ * O jsPDF é importado sob demanda dentro do clique — não entra no bundle
+ * inicial da página, só carrega quando alguém realmente compartilha.
  */
 export function RankingShare({
   title,
   subtitle,
   rows,
+  showFinances = true,
 }: {
   title: string;
   subtitle: string;
-  rows: RankingShareRow[];
+  rows: RankingPdfRow[];
+  showFinances?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
 
-  // Ranking completo: todos os que jogaram ao menos uma etapa.
   const usadas = rows.filter((r) => r.stagesPlayed > 0);
 
   async function compartilhar() {
@@ -181,38 +222,29 @@ export function RankingShare({
     setBusy(true);
     setAviso(null);
     try {
-      const canvas = desenharCartaz(title, subtitle, usadas);
-      const blob = await canvasParaBlob(canvas);
-      if (!blob) {
-        setAviso("Não foi possível gerar a imagem neste navegador.");
-        return;
-      }
+      const blob = await gerarPdf(title, subtitle, usadas, showFinances);
+      const nomeArquivo = `${title.replace(/[^\p{L}\p{N}]+/gu, "-").toLowerCase()}.pdf`;
+      const file = new File([blob], nomeArquivo, { type: "application/pdf" });
 
-      const nomeArquivo = `${title.replace(/[^\p{L}\p{N}]+/gu, "-").toLowerCase()}.png`;
-      const file = new File([blob], nomeArquivo, { type: "image/png" });
-
-      // Caminho principal: folha de compartilhamento do sistema (celular).
-      const nav = navigator as Navigator & {
-        canShare?: (data: ShareData) => boolean;
-      };
+      const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
       if (nav.canShare?.({ files: [file] })) {
         try {
           await nav.share({ files: [file], title, text: `${title} — ${subtitle}` });
           return;
         } catch (err) {
-          // Cancelar o diálogo NÃO é erro: só encerra sem baixar.
           if (err instanceof DOMException && err.name === "AbortError") return;
         }
       }
 
-      // Sem Web Share (ou falhou): baixa o arquivo.
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = nomeArquivo;
       a.click();
       URL.revokeObjectURL(url);
-      setAviso("Imagem baixada — ela está na sua pasta de downloads.");
+      setAviso("PDF baixado — ele está na sua pasta de downloads.");
+    } catch {
+      setAviso("Não foi possível gerar o PDF neste navegador.");
     } finally {
       setBusy(false);
     }
@@ -228,13 +260,12 @@ export function RankingShare({
         disabled={busy}
         className="inline-flex items-center gap-2 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm font-semibold text-gold-bright transition-colors hover:bg-gold/20 disabled:opacity-50"
       >
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true" className="h-4 w-4">
-          <circle cx="15" cy="5" r="2.2" />
-          <circle cx="5" cy="10" r="2.2" />
-          <circle cx="15" cy="15" r="2.2" />
-          <path d="M6.9 8.8 13.1 6.2M6.9 11.2l6.2 2.6" strokeLinecap="round" />
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-4 w-4">
+          <path d="M5 2.5h6l4 4v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1Z" strokeLinejoin="round" />
+          <path d="M11 2.5v4h4" strokeLinejoin="round" />
+          <path d="M7 11h6M7 14h4" strokeLinecap="round" />
         </svg>
-        {busy ? "Gerando…" : "Compartilhar ranking"}
+        {busy ? "Gerando PDF…" : "Compartilhar ranking (PDF)"}
       </button>
       {aviso ? <p className="text-xs text-chalk-dim">{aviso}</p> : null}
     </div>

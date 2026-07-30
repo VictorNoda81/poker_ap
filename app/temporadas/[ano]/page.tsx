@@ -97,12 +97,28 @@ export default async function TemporadaPage({ params }: Params) {
             <RankingShare
               title={season.name}
               subtitle={`${realizadas.length} ${realizadas.length === 1 ? "etapa disputada" : "etapas disputadas"}${inProgress ? " · parcial" : ""}`}
+              showFinances={appSettings.showPlayerFinances}
               rows={ranking.map((r) => ({
                 position: r.displayPosition,
                 name: r.player.fullName,
+                type: r.player.type,
                 points: r.totalPoints,
                 stagesPlayed: r.stagesPlayed,
+                averagePoints: r.averagePoints,
+                averagePlacement: r.averagePlacement,
                 wins: r.wins,
+                seconds: r.seconds,
+                thirds: r.thirds,
+                bestPlacement: r.bestPlacement,
+                bestPlacementCount: r.bestPlacementCount,
+                totalRebuys: r.totalRebuys,
+                totalAddons: r.totalAddons,
+                averageRebuys: r.averageRebuys,
+                stagesMissingExtras: r.stagesMissingExtras,
+                totalReceived: r.totalReceived,
+                totalPaid: r.totalPaid,
+                balance: r.balance,
+                stagesMissingFinancials: r.stagesMissingFinancials,
               }))}
             />
           </div>
