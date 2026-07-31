@@ -29,8 +29,8 @@ function PodiumCard({
 }) {
   const place = row.displayPosition as 1 | 2 | 3;
   const style = PODIUM_STYLE[place];
-  // Saldo quando o admin permite e há algum gasto lançado (usa o que já existe).
-  const mostrarSaldo = showFinances && row.totalPaid > 0;
+  // Saldo aparece para todos quando o admin permite (gasto ausente = zero).
+  const mostrarSaldo = showFinances && row.stagesPlayed > 0;
 
   return (
     <Link

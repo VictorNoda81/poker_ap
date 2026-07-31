@@ -272,8 +272,6 @@ export function PlayersDirectory({
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {linhas.map(({ player, agg }) => {
-            // Saldo com o que já foi lançado; "—" só quando não há gasto algum.
-            const semFinanceiro = agg.totalPaid === 0;
             return (
               <li key={player.player.id}>
                 <Link
@@ -353,7 +351,7 @@ export function PlayersDirectory({
                         </dt>
                         <dd
                           className={`tnum mt-0.5 text-sm font-bold ${
-                            semFinanceiro
+                            agg.stagesPlayed === 0
                               ? "text-chalk-dim"
                               : agg.balance > 0
                                 ? "text-emerald-400"
@@ -362,7 +360,7 @@ export function PlayersDirectory({
                                   : "text-chalk-dim"
                           }`}
                         >
-                          {semFinanceiro ? "—" : formatBRLSigned(agg.balance)}
+                          {agg.stagesPlayed === 0 ? "—" : formatBRLSigned(agg.balance)}
                         </dd>
                       </div>
                     ) : (

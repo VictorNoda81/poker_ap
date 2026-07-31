@@ -116,9 +116,15 @@ export default async function JogadorPage({ params }: Params) {
             />
             <StatCard
               label="Saldo"
-              value={semFinanceiro ? "—" : formatBRLSigned(career.balance)}
-              hint={semFinanceiro ? "Sem financeiro lançado" : "Prêmios menos gastos"}
-              tone={semFinanceiro ? "default" : career.balance >= 0 ? "positive" : "negative"}
+              value={career.stagesPlayed === 0 ? "—" : formatBRLSigned(career.balance)}
+              hint={semFinanceiro ? "Prêmios (gasto ainda não lançado)" : "Prêmios menos gastos"}
+              tone={
+                career.stagesPlayed === 0
+                  ? "default"
+                  : career.balance >= 0
+                    ? "positive"
+                    : "negative"
+              }
             />
           </>
         ) : null}
@@ -178,7 +184,7 @@ export default async function JogadorPage({ params }: Params) {
                 {showFinances ? (
                   <Summary
                     label="Saldo"
-                    value={row.totalPaid === 0 ? "—" : formatBRLSigned(row.balance)}
+                    value={row.stagesPlayed === 0 ? "—" : formatBRLSigned(row.balance)}
                   />
                 ) : null}
               </dl>
