@@ -38,6 +38,14 @@ const UNIFICACOES: { sobrevive: string; absorve: string; nome: string; tipo: Tip
   { sobrevive: "David Dotti", absorve: "David", nome: "David Dotti", tipo: "indefinido" },
   { sobrevive: "Diogo Barsi", absorve: "Diogo Parci", nome: "Diogo Barsi", tipo: "socio" },
   { sobrevive: "Fabricio Sadi", absorve: "Fabrcicio Sadi", nome: "Fabricio Sadi", tipo: "indefinido" },
+  { sobrevive: "Marco Chen", absorve: "Marcos Chen", nome: "Marco Chen", tipo: "indefinido" },
+  // Regina tinha três cadastros; sobrevive o de nome correto (socio).
+  { sobrevive: "Regina Sevilla", absorve: "Regina", nome: "Regina Sevilla", tipo: "socio" },
+  { sobrevive: "Regina Sevilla", absorve: "Regina Sevilha", nome: "Regina Sevilla", tipo: "socio" },
+  // Sobrevive o de nome correto para não colidir com o índice único de nome; o
+  // tipo (socio/convidado) vem do cadastro classificado.
+  { sobrevive: "Olavo Bueno", absorve: "Olavo", nome: "Olavo Bueno", tipo: "socio" },
+  { sobrevive: "Miguel Angelieri", absorve: "Miguel", nome: "Miguel Angelieri", tipo: "convidado" },
 ];
 
 interface Jogador {
