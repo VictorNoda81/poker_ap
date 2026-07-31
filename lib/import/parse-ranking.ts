@@ -91,6 +91,7 @@ const NICKNAME_ALIASES: Record<string, string> = {
   "alfredo socini": "alfredo soncini",
   ligia: "ligia masson",
   "silvio pires de paula": "silvio de paula",
+  "davi dotti": "david dotti",
 };
 
 export interface ParsedStage {
