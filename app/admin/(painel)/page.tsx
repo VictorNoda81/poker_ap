@@ -86,7 +86,7 @@ export default async function AdminHome({
         />
         <StatCard
           label="Líder"
-          value={lider ? lider.player.fullName.split(" ")[0] : "—"}
+          value={lider ? lider.player.fullName : "—"}
           hint={lider ? `${formatNumber(lider.totalPoints)} pontos` : undefined}
           tone="gold"
           icon={<TrophyIcon className="h-5 w-5" />}

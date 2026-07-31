@@ -57,10 +57,14 @@ function extrasIncompletos(row: RankingRow): boolean {
   return row.extrasRecordedStages === 0;
 }
 
-/** ROI = quanto recebeu ÷ quanto gastou (do que já foi lançado). */
+/**
+ * ROI = quanto recebeu ÷ quanto gastou (do que já foi lançado).
+ * Sem gasto lançado: retorno "infinito" se ganhou algo (gastou 0 registrado),
+ * indefinido ("—") se também não recebeu nada.
+ */
 function roiOf(row: RankingRow): number | null {
-  if (row.totalPaid <= 0) return null;
-  return row.totalReceived / row.totalPaid;
+  if (row.totalPaid > 0) return row.totalReceived / row.totalPaid;
+  return row.totalReceived > 0 ? Number.POSITIVE_INFINITY : null;
 }
 
 type SortKey =
@@ -467,15 +471,18 @@ export function RankingTable({
 
                   {showFinancials ? (
                     <>
+                      {/* Pago mostra "—" quando nenhum gasto foi lançado (é o
+                          dado que falta), mas Saldo e ROI aparecem para todos,
+                          tratando o gasto ausente como zero. */}
                       <td className="tnum whitespace-nowrap px-1.5 py-2.5 text-right text-chalk-dim">
                         {semGasto ? "—" : formatBRL(row.totalPaid)}
                       </td>
                       <td
                         className={`tnum whitespace-nowrap px-1.5 py-2.5 text-right font-bold ${
-                          semGasto ? "text-chalk-dim" : balanceClass(row.balance)
+                          row.stagesPlayed === 0 ? "text-chalk-dim" : balanceClass(row.balance)
                         }`}
                       >
-                        {semGasto ? "—" : formatBRLSigned(row.balance)}
+                        {row.stagesPlayed === 0 ? "—" : formatBRLSigned(row.balance)}
                       </td>
                       <td
                         className={`tnum px-1.5 py-2.5 text-right font-semibold ${
@@ -486,7 +493,11 @@ export function RankingTable({
                               : "text-cap-red-light"
                         }`}
                       >
-                        {roi === null ? "—" : `${formatNumber(roi, 2)}×`}
+                        {roi === null
+                          ? "—"
+                          : roi === Number.POSITIVE_INFINITY
+                            ? "∞"
+                            : `${formatNumber(roi, 2)}×`}
                       </td>
                     </>
                   ) : null}
