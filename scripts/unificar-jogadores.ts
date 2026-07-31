@@ -46,6 +46,8 @@ const UNIFICACOES: { sobrevive: string; absorve: string; nome: string; tipo: Tip
   // tipo (socio/convidado) vem do cadastro classificado.
   { sobrevive: "Olavo Bueno", absorve: "Olavo", nome: "Olavo Bueno", tipo: "socio" },
   { sobrevive: "Miguel Angelieri", absorve: "Miguel", nome: "Miguel Angelieri", tipo: "convidado" },
+  { sobrevive: "Rogério Villas Boas", absorve: "Rogério", nome: "Rogério Villas Boas", tipo: "convidado" },
+  { sobrevive: "Fabricio Tavares", absorve: "Fabricio", nome: "Fabricio Tavares", tipo: "convidado" },
 ];
 
 interface Jogador {

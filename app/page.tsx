@@ -68,8 +68,10 @@ export default async function HomePage({
   }
   const proxima = stages.find((s) => s.status === "scheduled");
   const jogadoresAtivos = ranking.filter((r) => r.stagesPlayed > 0).length;
-  // Em andamento = ainda há etapa por disputar. Define "Líder" vs "Campeão".
-  const inProgress = stages.some((s) => s.status === "scheduled");
+  // Em andamento = é a temporada atual. Define "Líder" vs "Campeão". Não basta
+  // "não ter etapa agendada": a temporada corrente segue aberta mesmo com todas
+  // as etapas lançadas, então o 1º dela é líder, não campeão.
+  const inProgress = season.is_current;
 
   return (
     <>

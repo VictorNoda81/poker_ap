@@ -664,8 +664,11 @@ export async function getPlayersAcrossSeasons(): Promise<{
   };
 
   for (const { season, bundle } of bundles) {
-    // Só há campeão em temporada encerrada; na que está correndo há líder.
-    const encerrada = !bundle.stages.some((s) => s.status === "scheduled");
+    // Só há campeão na temporada ENCERRADA — a temporada atual (is_current)
+    // segue em andamento mesmo com todas as etapas já lançadas, então o 1º
+    // dela é líder, não campeão. Antes usávamos "não há etapa agendada", o que
+    // marcava a líder da temporada corrente como campeã indevidamente.
+    const encerrada = !season.is_current;
 
     for (const row of bundle.ranking) {
       // Garante que todo jogador cadastrado apareça, mesmo sem participação —

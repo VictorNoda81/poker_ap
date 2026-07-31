@@ -69,7 +69,9 @@ export default async function TemporadaPage({ params }: Params) {
   }
   const jogadoresAtivos = ranking.filter((r) => r.stagesPlayed > 0).length;
   const final = stages.find((s) => s.isFinal);
-  const inProgress = stages.some((s) => s.status === "scheduled");
+  // Em andamento = temporada atual (não "sem etapa agendada"): a corrente segue
+  // aberta mesmo com todas as etapas lançadas — 1º é líder, não campeão.
+  const inProgress = season.is_current;
 
   return (
     <>
