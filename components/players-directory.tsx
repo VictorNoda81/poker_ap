@@ -272,8 +272,8 @@ export function PlayersDirectory({
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {linhas.map(({ player, agg }) => {
-            // Sem o gasto de todas as etapas, o saldo não é calculável.
-            const semFinanceiro = agg.stagesMissingFinancials > 0 || agg.totalPaid === 0;
+            // Saldo com o que já foi lançado; "—" só quando não há gasto algum.
+            const semFinanceiro = agg.totalPaid === 0;
             return (
               <li key={player.player.id}>
                 <Link

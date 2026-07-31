@@ -38,7 +38,6 @@ interface Row {
   rebuys: string;
   hadAddon: boolean;
   amountPaid: string;
-  prize: string;
   needsReview: boolean;
   reviewNote: string | null;
 }
@@ -56,7 +55,6 @@ function toRow(entry: EditorEntry): Row {
     rebuys: entry.rebuys === null ? "" : String(entry.rebuys),
     hadAddon: entry.hadAddon ?? false,
     amountPaid: entry.amountPaid === null ? "" : String(entry.amountPaid),
-    prize: entry.prizeAmount > 0 ? String(entry.prizeAmount) : "",
     needsReview: entry.needsReview,
     reviewNote: entry.reviewNote,
   };
@@ -98,6 +96,18 @@ export function StageResultsEditor({
   initialOtherCosts: number;
 }) {
   const [rows, setRows] = useState<Row[]>(() => initialEntries.map(toRow));
+  // Premiacao por colocacao (1o a 10o). So guarda o que o admin SOBRESCREVEU;
+  // posicoes intactas seguem a regra padrao (que acompanha a arrecadacao).
+  // Ao abrir uma etapa ja salva, comeca com os premios que ela tinha.
+  const [premios, setPremios] = useState<Record<number, string>>(() => {
+    const init: Record<number, string> = {};
+    for (const e of initialEntries) {
+      if (e.placement !== null && e.placement >= 1 && e.placement <= 10 && e.prizeAmount > 0) {
+        init[e.placement] = String(e.prizeAmount);
+      }
+    }
+    return init;
+  });
   const [search, setSearch] = useState("");
   const [manualGross, setManualGross] = useState(initialGrossOverride !== null);
   const [grossInput, setGrossInput] = useState(
@@ -157,7 +167,43 @@ export function StageResultsEditor({
       : suggestStagePrizes(custos, settings, available);
   }, [rows, gross, isFinal, accumulatedReserve, settings, taxaPorJogador, outrosCustos]);
 
-  const prizeTotal = round2(rows.reduce((sum, row) => sum + (parseMoney(row.prize) ?? 0), 0));
+  const POSICOES_PREMIADAS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+  // Distribuicao padrao SEMPRE com 1o a 5o presentes, para a tabela de premiacao
+  // mostrar o padrao completo mesmo antes de as colocacoes serem lancadas.
+  const breakdownPadrao = useMemo(() => {
+    const custos = {
+      gross,
+      participants: rows.length,
+      adminFeePerPlayer: taxaPorJogador,
+      otherCosts: outrosCustos,
+    };
+    return isFinal
+      ? suggestFinalPrizes(accumulatedReserve, custos, settings, [1, 2, 3, 4, 5])
+      : suggestStagePrizes(custos, settings, [1, 2, 3, 4, 5]);
+  }, [gross, rows.length, isFinal, accumulatedReserve, settings, taxaPorJogador, outrosCustos]);
+
+  /** Valor da regra padrao para uma colocacao (0 nas posicoes que ela nao premia). */
+  const premioPadrao = (pos: number): number =>
+    breakdownPadrao.byPlacement.find((p) => p.placement === pos)?.amount ?? 0;
+
+  /** Premio efetivo de uma colocacao: o que o admin editou, senao a regra padrao. */
+  const premioDaColocacao = (placement: number | null): number => {
+    if (placement === null || placement < 1 || placement > 10) return 0;
+    const override = premios[placement];
+    return override !== undefined ? (parseMoney(override) ?? 0) : premioPadrao(placement);
+  };
+
+  const somaPremios = round2(POSICOES_PREMIADAS.reduce((s, pos) => s + premioDaColocacao(pos), 0));
+
+  // Premios lancados = soma do que cada colocacao PRESENTE recebe (empate conta
+  // as duas). E o valor que confere contra a arrecadacao.
+  const prizeTotal = round2(
+    rows.reduce((sum, row) => {
+      const p = row.placement.trim() === "" ? null : Number(row.placement);
+      return sum + premioDaColocacao(p !== null && p >= 1 ? p : null);
+    }, 0),
+  );
 
   // Na Final não há reserva nova — o bolo é o acumulado, então a conferência
   // compara contra o pool total em vez da arrecadação da etapa.
@@ -189,6 +235,25 @@ export function StageResultsEditor({
     return buildStageMessage(stageLabel, entries);
   }
 
+  /** Muda re-buys ou add-on e recalcula o gasto do jogador na mesma hora. */
+  function setExtras(playerId: string, patch: Partial<Pick<Row, "rebuys" | "hadAddon">>) {
+    setRows((current) =>
+      current.map((row) => {
+        if (row.playerId !== playerId) return row;
+        const next = { ...row, ...patch };
+        const rebuys = next.rebuys.trim() === "" ? 0 : Number(next.rebuys) || 0;
+        next.amountPaid = String(
+          suggestAmountPaid(settings.buyin, settings.rebuy, rebuys, settings.addon, next.hadAddon),
+        );
+        return next;
+      }),
+    );
+  }
+
+  function resetPremios() {
+    setPremios({});
+  }
+
   function update(playerId: string, patch: Partial<Row>) {
     setRows((current) =>
       current.map((row) => (row.playerId === playerId ? { ...row, ...patch } : row)),
@@ -205,7 +270,6 @@ export function StageResultsEditor({
         hadAddon: false,
         // Todo participante paga ao menos o buy-in — já entra pré-preenchido.
         amountPaid: String(settings.buyin),
-        prize: "",
         needsReview: false,
         reviewNote: null,
       },
@@ -247,17 +311,6 @@ export function StageResultsEditor({
     );
   }
 
-  /** Pré-preenche a premiação padrão nas colocações 1 a 4. */
-  function applySuggestedPrizes() {
-    const byPlacement = new Map(breakdown.byPlacement.map((p) => [p.placement, p.amount]));
-    setRows((current) =>
-      current.map((row) => {
-        const suggested = byPlacement.get(Number(row.placement));
-        return suggested === undefined ? { ...row, prize: "" } : { ...row, prize: String(suggested) };
-      }),
-    );
-  }
-
   // --- Payload para a Server Action ----------------------------------------
 
   const payload = rows.map((row) => {
@@ -276,7 +329,7 @@ export function StageResultsEditor({
       amountPaid: parseMoney(row.amountPaid),
       rebuys: row.rebuys.trim() === "" ? null : Number(row.rebuys),
       hadAddon: row.rebuys.trim() === "" && !row.hadAddon ? null : row.hadAddon,
-      prizeAmount: parseMoney(row.prize) ?? 0,
+      prizeAmount: premioDaColocacao(placement),
     };
   });
 
@@ -361,9 +414,6 @@ export function StageResultsEditor({
               <GhostButton onClick={recalcAllPaid} className="px-3 py-1.5 text-xs">
                 Recalcular gastos pelos re-buys
               </GhostButton>
-              <GhostButton onClick={applySuggestedPrizes} className="px-3 py-1.5 text-xs">
-                Aplicar premiação sugerida
-              </GhostButton>
             </div>
           </div>
 
@@ -445,7 +495,7 @@ export function StageResultsEditor({
                           min={0}
                           inputMode="numeric"
                           value={row.rebuys}
-                          onChange={(event) => update(row.playerId, { rebuys: event.target.value })}
+                          onChange={(event) => setExtras(row.playerId, { rebuys: event.target.value })}
                           placeholder="0"
                           aria-label={`Re-buys de ${player?.fullName ?? ""}`}
                           className="tnum w-16 rounded-lg border border-ink-700 bg-ink-950 px-2 py-1.5 text-center text-sm text-chalk focus:border-cap-red focus:outline-none"
@@ -457,7 +507,7 @@ export function StageResultsEditor({
                           type="checkbox"
                           checked={row.hadAddon}
                           onChange={(event) =>
-                            update(row.playerId, { hadAddon: event.target.checked })
+                            setExtras(row.playerId, { hadAddon: event.target.checked })
                           }
                           aria-label={`Add-on de ${player?.fullName ?? ""}`}
                           className="h-4 w-4 rounded border-ink-600 bg-ink-950 accent-cap-red"
@@ -477,15 +527,12 @@ export function StageResultsEditor({
                         />
                       </td>
 
-                      <td className="px-2 py-2 text-right">
-                        <input
-                          value={row.prize}
-                          onChange={(event) => update(row.playerId, { prize: event.target.value })}
-                          inputMode="decimal"
-                          placeholder="—"
-                          aria-label={`Prêmio de ${player?.fullName ?? ""}`}
-                          className="tnum w-24 rounded-lg border border-ink-700 bg-ink-950 px-2 py-1.5 text-right text-sm text-gold focus:border-cap-red focus:outline-none"
-                        />
+                      <td className="tnum px-2 py-2 text-right font-bold text-gold">
+                        {(() => {
+                          const p = row.placement.trim() === "" ? null : Number(row.placement);
+                          const valor = premioDaColocacao(p !== null && p >= 1 ? p : null);
+                          return valor > 0 ? formatBRL(valor) : "—";
+                        })()}
                       </td>
 
                       <td className="px-2 py-2 text-right">
@@ -634,27 +681,53 @@ export function StageResultsEditor({
           />
         </dl>
 
-        {/* Sugestão da distribuição padrão. */}
-        {breakdown.byPlacement.length > 0 && gross + accumulatedReserve > 0 ? (
-          <div className="mt-4 rounded-lg border border-ink-800 bg-ink-950 px-4 py-3">
+        {/* Premiacao por colocacao — editavel, dirige o premio de cada jogador. */}
+        <div className="mt-4 rounded-lg border border-ink-800 bg-ink-950 px-4 py-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-chalk-dim">
-              Distribuição padrão sugerida
+              Premiação por colocação (1º a 10º)
             </p>
-            <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm">
-              {breakdown.byPlacement.map((prize) => (
-                <li key={prize.placement} className="text-chalk-dim">
-                  {prize.placement}º{" "}
-                  <span className="tnum font-bold text-chalk">{formatBRL(prize.amount)}</span>
-                </li>
-              ))}
-            </ul>
-            {breakdown.shortfall ? (
-              <p className="mt-2 text-xs text-amber-300">
-                As deduções passam da arrecadação — não sobra nada para distribuir.
-              </p>
-            ) : null}
+            <GhostButton onClick={resetPremios} className="px-2.5 py-1 text-[0.7rem]">
+              Restaurar padrão
+            </GhostButton>
           </div>
-        ) : null}
+          <p className="mb-3 text-xs text-chalk-dim">
+            Pré-preenchida com a regra padrão. Edite os valores como quiser: o prêmio de cada
+            jogador é preenchido automaticamente pela colocação. Posições sem valor pagam nada.
+          </p>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-10">
+            {POSICOES_PREMIADAS.map((pos) => (
+              <div key={pos}>
+                <label
+                  htmlFor={`premio-${pos}`}
+                  className="mb-1 block text-center text-[0.62rem] font-bold text-chalk-dim"
+                >
+                  {pos}º
+                </label>
+                <input
+                  id={`premio-${pos}`}
+                  value={premios[pos] ?? (premioPadrao(pos) > 0 ? String(premioPadrao(pos)) : "")}
+                  onChange={(event) =>
+                    setPremios((cur) => ({ ...cur, [pos]: event.target.value }))
+                  }
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  aria-label={`Prêmio do ${pos}º lugar`}
+                  className="tnum w-full rounded-lg border border-ink-700 bg-ink-900 px-1.5 py-1.5 text-right text-sm text-gold focus:border-cap-red focus:outline-none"
+                />
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-chalk-dim">
+            Soma da premiação por colocação:{" "}
+            <strong className="tnum text-chalk">{formatBRL(somaPremios)}</strong>
+            {breakdown.shortfall ? (
+              <span className="ml-2 text-amber-300">
+                As deduções passam da arrecadação — confira os valores.
+              </span>
+            ) : null}
+          </p>
+        </div>
 
         {/* Avisos — nenhum deles bloqueia o salvamento. */}
         <div className="mt-4 space-y-2">

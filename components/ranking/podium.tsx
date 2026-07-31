@@ -29,10 +29,8 @@ function PodiumCard({
 }) {
   const place = row.displayPosition as 1 | 2 | 3;
   const style = PODIUM_STYLE[place];
-  // Saldo só quando o admin permite E há gasto de todas as etapas — mostrar um
-  // "lucro" só com prêmios seria enganoso.
-  const mostrarSaldo =
-    showFinances && row.stagesMissingFinancials === 0 && row.totalPaid > 0;
+  // Saldo quando o admin permite e há algum gasto lançado (usa o que já existe).
+  const mostrarSaldo = showFinances && row.totalPaid > 0;
 
   return (
     <Link

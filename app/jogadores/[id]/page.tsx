@@ -46,10 +46,11 @@ export default async function JogadorPage({ params }: Params) {
 
   const { player, bySeason, career } = result.data.detail;
   const showFinances = result.data.appSettings.showPlayerFinances;
-  const semFinanceiro = career.totalPaid === 0 && career.totalReceived === 0;
-  // Re-buy/add-on só entrou no lançamento em 2026: com etapa em branco, somar o
-  // que existe daria um número menor que o real e pareceria economia.
-  const semExtras = career.stagesMissingExtras > 0 || career.extrasRecordedStages === 0;
+  // Mostra Pago/Saldo com o que já foi lançado; "—" só quando não há gasto algum.
+  const semFinanceiro = career.totalPaid === 0;
+  // Re-buys/add-on consideram só as etapas em que foram lançados. Some ("—")
+  // apenas quando nenhuma etapa da carreira tem esse dado.
+  const semExtras = career.extrasRecordedStages === 0;
   const mediaRebuys = semExtras ? null : career.totalRebuys / career.extrasRecordedStages;
 
   return (
@@ -159,7 +160,7 @@ export default async function JogadorPage({ params }: Params) {
                 <Summary
                   label="Re-buys"
                   value={
-                    row.stagesMissingExtras > 0
+                    row.extrasRecordedStages === 0
                       ? "—"
                       : `${row.totalRebuys} · ${row.totalAddons} add-on${row.totalAddons === 1 ? "" : "s"}`
                   }
@@ -167,9 +168,7 @@ export default async function JogadorPage({ params }: Params) {
                 <Summary
                   label="RB/etapa"
                   value={
-                    row.stagesMissingExtras > 0 || row.averageRebuys === null
-                      ? "—"
-                      : formatNumber(row.averageRebuys, 1)
+                    row.averageRebuys === null ? "—" : formatNumber(row.averageRebuys, 1)
                   }
                 />
                 <Summary
@@ -179,11 +178,7 @@ export default async function JogadorPage({ params }: Params) {
                 {showFinances ? (
                   <Summary
                     label="Saldo"
-                    value={
-                      row.totalPaid === 0 && row.totalReceived === 0
-                        ? "—"
-                        : formatBRLSigned(row.balance)
-                    }
+                    value={row.totalPaid === 0 ? "—" : formatBRLSigned(row.balance)}
                   />
                 ) : null}
               </dl>

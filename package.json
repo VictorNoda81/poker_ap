@@ -22,7 +22,8 @@
     "fundir": "tsx scripts/fundir-jogadores.ts",
     "classificar": "tsx scripts/classificar.ts",
     "premios": "tsx scripts/preencher-premios.ts",
-    "zerar-extras": "tsx scripts/zerar-extras.ts"
+    "zerar-extras": "tsx scripts/zerar-extras.ts",
+    "unificar": "tsx scripts/unificar-jogadores.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

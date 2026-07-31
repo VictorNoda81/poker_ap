@@ -87,6 +87,10 @@ const NICKNAME_ALIASES: Record<string, string> = {
   armani: "andre armani",
   armando: "joao armando",
   pavelec: "daniel pavelec",
+  // Cadastros unificados pela liga (nome/tipo corretos definidos no admin).
+  "alfredo socini": "alfredo soncini",
+  ligia: "ligia masson",
+  "silvio pires de paula": "silvio de paula",
 };
 
 export interface ParsedStage {

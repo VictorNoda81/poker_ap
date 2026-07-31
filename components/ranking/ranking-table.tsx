@@ -39,29 +39,27 @@ function balanceClass(balance: number): string {
 }
 
 /**
- * Enquanto houver etapa sem o valor gasto lançado, "Pago", "Saldo" e "ROI" não
- * são calculáveis: somar prêmios contra um gasto parcial mostraria lucro que
- * não existe. Nesses casos a tabela exibe "—".
+ * "Pago", "Saldo" e "ROI" aparecem com o que JÁ foi lançado — as etapas ainda
+ * sem valor gasto simplesmente não entram na soma. Só some tudo ("—") quando o
+ * jogador não tem nenhum gasto registrado. Antes exigíamos TODAS as etapas
+ * preenchidas, o que escondia o dado enquanto a liga preenchia aos poucos.
  */
-function gastoIncompleto(row: RankingRow): boolean {
-  return row.stagesMissingFinancials > 0;
+function semGastoLancado(row: RankingRow): boolean {
+  return row.totalPaid === 0;
 }
 
 /**
- * Mesma lógica de "Pago": enquanto houver etapa sem re-buy/add-on lançados, os
- * totais mentiriam — um jogador com 6 etapas e só 1 lançada apareceria com
- * "1 re-buy", parecendo mais econômico que quem teve tudo registrado.
- *
- * A liga só passou a registrar re-buy e add-on em 2026; as etapas importadas
- * das planilhas não têm essa informação, então hoje quase tudo exibe "—".
+ * Re-buys por etapa considera só as etapas em que foram lançados (a média já é
+ * calculada assim no domínio). Some apenas quando nenhuma etapa do jogador tem
+ * re-buy/add-on registrado — hoje, quem só jogou etapas antigas sem o dado.
  */
 function extrasIncompletos(row: RankingRow): boolean {
-  return row.stagesPlayed === 0 || row.stagesMissingExtras > 0;
+  return row.extrasRecordedStages === 0;
 }
 
-/** ROI = quanto recebeu ÷ quanto gastou. null quando o gasto não é conhecido. */
+/** ROI = quanto recebeu ÷ quanto gastou (do que já foi lançado). */
 function roiOf(row: RankingRow): number | null {
-  if (gastoIncompleto(row) || row.totalPaid <= 0) return null;
+  if (row.totalPaid <= 0) return null;
   return row.totalReceived / row.totalPaid;
 }
 
@@ -385,7 +383,7 @@ export function RankingTable({
 
           <tbody>
             {filtered.map((row) => {
-              const semGasto = gastoIncompleto(row) || row.totalPaid === 0;
+              const semGasto = semGastoLancado(row);
               const roi = roiOf(row);
               return (
                 <tr
