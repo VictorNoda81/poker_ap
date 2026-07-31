@@ -35,6 +35,9 @@ const UNIFICACOES: { sobrevive: string; absorve: string; nome: string; tipo: Tip
   { sobrevive: "Ligia", absorve: "Lígia Masson", nome: "Ligia Masson", tipo: "convidado" },
   { sobrevive: "Silvio de Paula", absorve: "Silvio Pires de Paula", nome: "Silvio de Paula", tipo: "socio" },
   { sobrevive: "David Dotti", absorve: "Davi Dotti", nome: "David Dotti", tipo: "indefinido" },
+  { sobrevive: "David Dotti", absorve: "David", nome: "David Dotti", tipo: "indefinido" },
+  { sobrevive: "Diogo Barsi", absorve: "Diogo Parci", nome: "Diogo Barsi", tipo: "socio" },
+  { sobrevive: "Fabricio Sadi", absorve: "Fabrcicio Sadi", nome: "Fabricio Sadi", tipo: "indefinido" },
 ];
 
 interface Jogador {
