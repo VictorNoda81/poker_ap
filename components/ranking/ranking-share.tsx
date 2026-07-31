@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { formatBRL, formatBRLSigned, formatNumber } from "@/lib/domain/money";
+import { formatNumber } from "@/lib/domain/money";
+import type { StageColumn } from "./ranking-table";
 
 /** Uma linha do ranking com todas as métricas, para a tabela do PDF. */
 export interface RankingPdfRow {
+  playerId: string;
   position: number;
   name: string;
   type: "socio" | "convidado" | "indefinido";
@@ -53,7 +55,8 @@ async function gerarPdf(
   title: string,
   subtitle: string,
   rows: RankingPdfRow[],
-  showFinances: boolean,
+  stageColumns: StageColumn[],
+  pointsByStage: Record<string, Record<string, number>>,
 ): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
@@ -77,7 +80,7 @@ async function gerarPdf(
   doc.setFontSize(9);
   doc.text(`${subtitle}  ·  Liga de Poker · Clube Alto dos Pinheiros`, 14, 18);
 
-  // Colunas: sempre as métricas de jogo; Pago/Saldo/ROI só quando permitido.
+  // Só métricas de jogo (sem financeiro/re-buys) + pontos de cada etapa no fim.
   const head = [
     "#",
     "Jogador",
@@ -90,44 +93,26 @@ async function gerarPdf(
     "2º",
     "3º",
     "Melhor",
-    "Re-buys",
-    "Add-ons",
-    "RB/etapa",
-    "Prêmio",
-    ...(showFinances ? ["Pago", "Saldo", "ROI"] : []),
+    ...stageColumns.map((s) => (s.isFinal ? "EF" : `E${s.number}`)),
   ];
 
-  const body = rows.map((row) => {
-    const semExtras = row.stagesMissingExtras > 0;
-    const semGasto = row.stagesMissingFinancials > 0 || row.totalPaid === 0;
-    const roi = semGasto || row.totalPaid <= 0 ? null : row.totalReceived / row.totalPaid;
-
-    const linha = [
-      String(row.position),
-      row.name,
-      TIPO_LABEL[row.type],
-      formatNumber(row.points),
-      String(row.stagesPlayed),
-      formatNumber(row.averagePoints, 1),
-      row.averagePlacement === null ? "—" : `${formatNumber(row.averagePlacement, 1)}º`,
-      String(row.wins),
-      String(row.seconds),
-      String(row.thirds),
-      melhorTexto(row),
-      semExtras ? "—" : String(row.totalRebuys),
-      semExtras ? "—" : String(row.totalAddons),
-      semExtras || row.averageRebuys === null ? "—" : formatNumber(row.averageRebuys, 1),
-      row.totalReceived === 0 ? "—" : formatBRL(row.totalReceived),
-    ];
-    if (showFinances) {
-      linha.push(
-        semGasto ? "—" : formatBRL(row.totalPaid),
-        semGasto ? "—" : formatBRLSigned(row.balance),
-        roi === null ? "—" : `${formatNumber(roi, 2)}×`,
-      );
-    }
-    return linha;
-  });
+  const body = rows.map((row) => [
+    String(row.position),
+    row.name,
+    TIPO_LABEL[row.type],
+    formatNumber(row.points),
+    String(row.stagesPlayed),
+    formatNumber(row.averagePoints, 1),
+    row.averagePlacement === null ? "—" : `${formatNumber(row.averagePlacement, 1)}º`,
+    String(row.wins),
+    String(row.seconds),
+    String(row.thirds),
+    melhorTexto(row),
+    ...stageColumns.map((s) => {
+      const pts = pointsByStage[row.playerId]?.[s.id];
+      return pts === undefined ? "—" : formatNumber(pts);
+    }),
+  ]);
 
   autoTable(doc, {
     head: [head],
@@ -205,12 +190,14 @@ export function RankingShare({
   title,
   subtitle,
   rows,
-  showFinances = true,
+  stageColumns = [],
+  pointsByStage = {},
 }: {
   title: string;
   subtitle: string;
   rows: RankingPdfRow[];
-  showFinances?: boolean;
+  stageColumns?: StageColumn[];
+  pointsByStage?: Record<string, Record<string, number>>;
 }) {
   const [busy, setBusy] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -222,7 +209,7 @@ export function RankingShare({
     setBusy(true);
     setAviso(null);
     try {
-      const blob = await gerarPdf(title, subtitle, usadas, showFinances);
+      const blob = await gerarPdf(title, subtitle, usadas, stageColumns, pointsByStage);
       const nomeArquivo = `${title.replace(/[^\p{L}\p{N}]+/gu, "-").toLowerCase()}.pdf`;
       const file = new File([blob], nomeArquivo, { type: "application/pdf" });
 

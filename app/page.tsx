@@ -51,8 +51,21 @@ export default async function HomePage({
   }
 
   const { seasons, bundle, appSettings } = result.data;
-  const { season, ranking, stages, accumulatedReserve, finalPot, totals, settings } = bundle;
+  const { season, ranking, stages, entries, accumulatedReserve, finalPot, totals, settings } =
+    bundle;
   const realizadas = stages.filter((s) => s.status === "completed");
+
+  // Colunas de pontos por etapa (só as realizadas) para o fim da tabela e do PDF.
+  const stageColumns = realizadas.map((s) => ({
+    id: s.id,
+    number: s.number,
+    isFinal: s.isFinal,
+    name: stageName(s.number, s.eventDate, s.isFinal),
+  }));
+  const pointsByStage: Record<string, Record<string, number>> = {};
+  for (const e of entries) {
+    (pointsByStage[e.playerId] ??= {})[e.stageId] = e.points;
+  }
   const proxima = stages.find((s) => s.status === "scheduled");
   const jogadoresAtivos = ranking.filter((r) => r.stagesPlayed > 0).length;
   // Em andamento = ainda há etapa por disputar. Define "Líder" vs "Campeão".
@@ -142,8 +155,10 @@ export default async function HomePage({
             <RankingShare
               title={season.name}
               subtitle={`${realizadas.length} ${realizadas.length === 1 ? "etapa disputada" : "etapas disputadas"}${inProgress ? " · parcial" : ""}`}
-              showFinances={appSettings.showPlayerFinances}
+              stageColumns={stageColumns}
+              pointsByStage={pointsByStage}
               rows={ranking.map((r) => ({
+                playerId: r.player.id,
                 position: r.displayPosition,
                 name: r.player.fullName,
                 type: r.player.type,
@@ -167,7 +182,12 @@ export default async function HomePage({
               }))}
             />
           </div>
-          <RankingTable rows={ranking} showFinancials={appSettings.showPlayerFinances} />
+          <RankingTable
+            rows={ranking}
+            showFinancials={appSettings.showPlayerFinances}
+            stageColumns={stageColumns}
+            pointsByStage={pointsByStage}
+          />
           <p className="mt-4 text-xs leading-relaxed text-chalk-dim">
             <strong className="text-chalk-dim/90">Prêmio</strong> é o total que o jogador recebeu de
             premiação.

@@ -16,6 +16,7 @@ import {
 import { getAppSettings, getSeasonBundle, getSeasonByYear } from "@/lib/db/queries";
 import { load } from "@/lib/db/load";
 import { formatBRL, formatNumber } from "@/lib/domain/money";
+import { stageName } from "@/lib/domain/stage-name";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +43,30 @@ export default async function TemporadaPage({ params }: Params) {
   if (result.status === "error") return <ErrorNotice message={result.message} />;
   if (!result.data) notFound();
 
-  const { season, ranking, stages, accumulatedReserve, finalPot, totals, settings, appSettings } =
-    result.data;
+  const {
+    season,
+    ranking,
+    stages,
+    entries,
+    accumulatedReserve,
+    finalPot,
+    totals,
+    settings,
+    appSettings,
+  } = result.data;
   const realizadas = stages.filter((s) => s.status === "completed");
+
+  // Colunas de pontos por etapa (só as realizadas) para o fim da tabela e do PDF.
+  const stageColumns = realizadas.map((s) => ({
+    id: s.id,
+    number: s.number,
+    isFinal: s.isFinal,
+    name: stageName(s.number, s.eventDate, s.isFinal),
+  }));
+  const pointsByStage: Record<string, Record<string, number>> = {};
+  for (const e of entries) {
+    (pointsByStage[e.playerId] ??= {})[e.stageId] = e.points;
+  }
   const jogadoresAtivos = ranking.filter((r) => r.stagesPlayed > 0).length;
   const final = stages.find((s) => s.isFinal);
   const inProgress = stages.some((s) => s.status === "scheduled");
@@ -97,8 +119,10 @@ export default async function TemporadaPage({ params }: Params) {
             <RankingShare
               title={season.name}
               subtitle={`${realizadas.length} ${realizadas.length === 1 ? "etapa disputada" : "etapas disputadas"}${inProgress ? " · parcial" : ""}`}
-              showFinances={appSettings.showPlayerFinances}
+              stageColumns={stageColumns}
+              pointsByStage={pointsByStage}
               rows={ranking.map((r) => ({
+                playerId: r.player.id,
                 position: r.displayPosition,
                 name: r.player.fullName,
                 type: r.player.type,
@@ -122,7 +146,12 @@ export default async function TemporadaPage({ params }: Params) {
               }))}
             />
           </div>
-          <RankingTable rows={ranking} showFinancials={appSettings.showPlayerFinances} />
+          <RankingTable
+            rows={ranking}
+            showFinancials={appSettings.showPlayerFinances}
+            stageColumns={stageColumns}
+            pointsByStage={pointsByStage}
+          />
         </>
       )}
 

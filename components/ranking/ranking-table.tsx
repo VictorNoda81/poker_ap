@@ -196,12 +196,27 @@ function sortValue(row: RankingRow, key: SortKey): number | string | null {
   }
 }
 
+/** Uma etapa que vira coluna de pontos no fim da tabela. */
+export interface StageColumn {
+  id: string;
+  number: number;
+  isFinal: boolean;
+  /** Nome completo ("Etapa 7 - Jul/26"), usado no title da coluna. */
+  name: string;
+}
+
 export function RankingTable({
   rows,
   showFinancials = true,
+  stageColumns = [],
+  pointsByStage = {},
 }: {
   rows: RankingRow[];
   showFinancials?: boolean;
+  /** Etapas realizadas, em ordem — cada uma vira uma coluna de pontos no fim. */
+  stageColumns?: StageColumn[];
+  /** Pontos por jogador e por etapa: pointsByStage[playerId][stageId]. */
+  pointsByStage?: Record<string, Record<string, number>>;
 }) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<Filter>("todos");
@@ -324,9 +339,12 @@ export function RankingTable({
       {/* ---------------------------------------------------------------- */}
       <div className="card table-scroll">
         <table
-          className={`w-full table-fixed border-collapse text-sm ${
-            showFinancials ? "min-w-[76rem]" : "min-w-[58rem]"
-          }`}
+          className="w-full table-fixed border-collapse text-sm"
+          // Larguras fixas somam mais que a tela: a tabela rola na horizontal em
+          // vez de espremer as colunas. Cada etapa adiciona ~2,75rem.
+          style={{
+            minWidth: `${(showFinancials ? 76 : 58) + stageColumns.length * 2.75}rem`,
+          }}
         >
           {/* Larguras fixas + uma coluna final sem largura: o espaço que sobra
               vai para ela, em vez de a coluna do nome esticar e afastar os
@@ -348,6 +366,9 @@ export function RankingTable({
                         : "w-[4.5rem]"
                 }
               />
+            ))}
+            {stageColumns.map((s) => (
+              <col key={s.id} className="w-[2.75rem]" />
             ))}
             <col />
           </colgroup>
@@ -381,6 +402,17 @@ export function RankingTable({
                   </th>
                 );
               })}
+              {/* Pontos por etapa — colunas fixas (não ordenáveis). */}
+              {stageColumns.map((s) => (
+                <th
+                  key={s.id}
+                  scope="col"
+                  title={s.name}
+                  className="px-1 py-2.5 text-right font-bold"
+                >
+                  {s.isFinal ? "EF" : `E${s.number}`}
+                </th>
+              ))}
               <th aria-hidden="true" className="px-0" />
             </tr>
           </thead>
@@ -501,6 +533,19 @@ export function RankingTable({
                       </td>
                     </>
                   ) : null}
+
+                  {/* Pontos do jogador em cada etapa (— quando não jogou). */}
+                  {stageColumns.map((s) => {
+                    const pts = pointsByStage[row.player.id]?.[s.id];
+                    return (
+                      <td
+                        key={s.id}
+                        className="tnum px-1 py-2.5 text-right text-chalk-dim"
+                      >
+                        {pts === undefined ? "—" : formatNumber(pts)}
+                      </td>
+                    );
+                  })}
                   <td aria-hidden="true" className="px-0" />
                 </tr>
               );
